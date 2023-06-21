@@ -1,6 +1,6 @@
 # Equation Learning for COVASIM with added Adaptive Behaviors using Biologically-Informed Neural Networks
 
-All equation learning and BINNs code has been adapted from [1.](https://arxiv.org/abs/2005.13073) and [Xin Li](xli86@ncsu.edu).
+All equation learning and BINNs code has been adapted from [[1.]](https://arxiv.org/abs/2005.13073) and [Xin Li](xli86@ncsu.edu).
 
 All code under the folder titled "covasim" is the work of the ***["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim)***.
 
