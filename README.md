@@ -1,4 +1,4 @@
-# Equation Learning for COVASIM with added Adaptive Behaviors using Biologically-informed Neural Networks
+# Equation Learning for COVASIM with added Adaptive Behaviors using Biologically-Informed Neural Networks
 
 #### References
 
