@@ -1,4 +1,6 @@
 import os.path
+import sys
+sys.path.append('../')
 
 import joblib
 import pandas as pd
@@ -146,7 +148,7 @@ def dynamic_tracing(sim):
 
 
 def test_data_generator():
-    # Define the testing and contact tracing interventions
+    # Define the testing and contact tracing interventions (hyperparameter)
     test_scale = 0.1
     # test_quarantine_scale = 0.1   min(test_scale * 4, 1)
     tp = cv.test_prob(symp_prob=test_scale, asymp_prob=0.001, symp_quar_prob=0.3,
@@ -180,6 +182,10 @@ def test_data_generator():
     if have_new_variant:
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
+    # manually intialize
+    sim.initialize()
+    # assign attributes to people object
+    
     sim.run()
     sim.plot(to_plot=['new_infections_by_variant','new_infections', 'new_tests', 'new_diagnoses', 'cum_diagnoses', 'new_quarantined', 'test_yield'],
              do_show=False)

@@ -4,7 +4,8 @@ Numerical utilities for running Covasim.
 These include the viral load, transmissibility, and infection calculations
 at the heart of the integration loop.
 '''
-
+import sys
+sys.path.append('../')
 #%% Housekeeping
 
 import numba as nb # For faster computations
