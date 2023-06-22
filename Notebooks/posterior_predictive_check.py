@@ -15,7 +15,7 @@ from Modules.Models.BuildBINNs import BINNCovasim
 import scipy
 
 device = torch.device(GetLowestGPU(pick_from=[0,1,2,3]))
-path = '../Data/covasim_data/'
+path = '../Data/covasim_data/xin_data/'
 population = 200000
 test_prob = 0.1
 trace_prob = 0.3

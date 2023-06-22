@@ -4,7 +4,7 @@ sys.path.append('../')
 
 import joblib
 import pandas as pd
-from scipy.stats import beta
+from scipy.stats import beta, bernoulli
 
 import covasim.covasim as cv
 import covasim.covasim.utils as cvu
@@ -74,15 +74,12 @@ class store_compartments(cv.Analyzer):
         pl.savefig('../Notebooks/figs/drums/' + plot_name + '.png')
         return
     
-def get_dynamic_mask(ftype, eff_ub):
-    
+def get_dynamic_mask(ftype, n):
     if ftype == 'logistic':
-        t = np.arange(0, 200, 1)
-        res = np.zeros(len(t))
+        res = np.zeros(len(n))
         p = res
     elif ftype == 'beta':
-        p = beta.rvs(1, 99, size=200)
-    
+        p = beta.rvs(1, 99, size=n)
     return p
 
 def get_dynamic_eff(ftype, eff_ub):
@@ -104,18 +101,6 @@ def get_dynamic_eff(ftype, eff_ub):
         res_all = eff_ub * np.ones(200)
         t_max = max(t)
         t_scaled = t / t_max
-        # slope = eff_ub / 50
-        # res = np.zeros(len(t))
-        # # 0 - 30
-        # res += (t < 30) * slope * (t + 1)
-        # # 31 to 60
-        # res += ((t >= 30) & (t < 60)) * (-0.00015 * t **2 + 0.0177 * t - 0.210)
-        # # 61 to 90
-        # res += ((60 <= t) & (t < 90)) * eff_ub
-        # # 91 to 120
-        # res += ((90 <= t) & (t < 120)) * (-0.00015 * t ** 2 + 0.0273 * t - 0.939)
-        # # 121 to 150
-        # res += ((120 <= t) & (t < 150)) * (eff_ub - slope * (t - 100 + 1))
 
         # use pdf of beta distribution
         a, b = 3, 3
@@ -143,13 +128,6 @@ def dynamic_tracing(sim):
     # update the trace_probs
     cur_t = sim.t
     sim_len = sim.npts
-    # eff = np.zeros(sim_len)
-    # start_day_trace = cur_inter.start_day
-    # linear_stage_len, constant_stage_len = 30, 30
-    # linear_stage_end = start_day_trace + linear_stage_len
-    # constant_stage_end = linear_stage_end + constant_stage_len
-    # eff[start_day_trace:linear_stage_end] = np.linspace(eff_lb, eff_ub, constant_stage_len)
-    # eff[linear_stage_end:] = eff_ub
     eff = tracing_array.copy()
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
     cur_scale = eff[cur_t]
@@ -193,9 +171,12 @@ def test_data_generator():
     if have_new_variant:
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
+        
     # manually intialize
     sim.initialize()
+    p = get_dynamic_mask('beta', sim['pop size'])
     # assign attributes to people object
+    sim.people.mask_comp = bernoulli.rvs(np.mean(p), sim['pop size'])
     
     sim.run()
     sim.plot(to_plot=['new_infections_by_variant','new_infections', 'new_tests', 'new_diagnoses', 'cum_diagnoses', 'new_quarantined', 'test_yield'],
