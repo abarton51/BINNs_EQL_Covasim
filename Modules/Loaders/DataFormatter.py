@@ -102,13 +102,21 @@ def load_covasim_data(file_path, population, test_prob, trace_prob, keep_d, case
         plt.close()
     return params
 
-def load_covasim_data_drums(file_path, population, test_prob, trace_prob, keep_d, case_name, plot=True):
+def load_covasim_data_drums(file_path, population, keep_d, case_name, plot=True):
+    '''
+    Load covasim simulation data from .joblib file into dictionary/
+    
+    Args:
+        file_path (str): name of the file path
+        population (int): number of agents in population
+        keep_d (bool): boolean value indicating whether or not to include D (diagnosed) in model
+        case_name (str): case name of the simulation
+        plot (bool): whether or not to plot simulation data
+    
+    Returns:
+        params (dict): dictionary with values for each parameter of dataset
+    '''
 
-    # file_name = '_'.join(['covasim', str(population), str(test_prob), str(trace_prob)])
-    # if not keep_d:
-    #     file_name += '_' + 'noD'
-    # if dynamic:
-    #     file_name += '_' + 'dynamic'
     file_name = 'covasim_' + str(case_name)
     params = joblib.load(file_path + file_name + '.joblib')
 

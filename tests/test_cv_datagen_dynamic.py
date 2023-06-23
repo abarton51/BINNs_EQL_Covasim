@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from Notebooks.utils import get_case_name, import_new_variants
 
 eff_lb, eff_ub = 0.0, 0.3
-chi_type = 'piecewise'
+chi_type = 'constant'
 
 class store_compartments(cv.Analyzer):
 
@@ -172,11 +172,12 @@ def test_data_generator():
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
         
+    
     # manually intialize
-    sim.initialize()
-    p = get_dynamic_mask('beta', sim['pop size'])
+    # sim.initialize()
+    # p = get_dynamic_mask('beta', sim['pop size'])
     # assign attributes to people object
-    sim.people.mask_comp = bernoulli.rvs(np.mean(p), sim['pop size'])
+    # sim.people.mask_comp = bernoulli.rvs(np.mean(p), sim['pop size'])
     
     sim.run()
     sim.plot(to_plot=['new_infections_by_variant','new_infections', 'new_tests', 'new_diagnoses', 'cum_diagnoses', 'new_quarantined', 'test_yield'],
