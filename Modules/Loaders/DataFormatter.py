@@ -101,3 +101,46 @@ def load_covasim_data(file_path, population, test_prob, trace_prob, keep_d, case
         plt.savefig(file_path + file_name + '.png')
         plt.close()
     return params
+
+def load_covasim_data_drums(file_path, population, test_prob, trace_prob, keep_d, case_name, plot=True):
+
+    # file_name = '_'.join(['covasim', str(population), str(test_prob), str(trace_prob)])
+    # if not keep_d:
+    #     file_name += '_' + 'noD'
+    # if dynamic:
+    #     file_name += '_' + 'dynamic'
+    file_name = 'covasim_' + str(case_name)
+    params = joblib.load(file_path + file_name + '.joblib')
+
+    if plot and isinstance(params['data'], pd.DataFrame):
+        data = params['data']
+        n = data.shape[1]
+        col_names = list(data.columns)
+        t = np.arange(1, data.shape[0] + 1)
+        # plot compartments
+        fig = plt.figure(figsize=(10, 7))
+        for i in range(1, n + 1):
+            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i)
+            ax.plot(t, data.iloc[:, i - 1], '.-', label=col_names[i - 1])
+            ax.legend()
+            fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        plt.tight_layout(pad=2)
+        plt.savefig(file_path + file_name + '.png')
+        plt.close()
+    if plot and isinstance(params['data'], list):
+        data = params['data']
+        n = data[0].shape[1]
+        col_names = list(data[0].columns)
+        t = np.arange(1, data[0].shape[0] + 1)
+        # plot compartments
+        fig = plt.figure(figsize=(10, 7))
+        for i in range(1, n + 1):
+            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i)
+            for j in range(len(data)):
+                ax.plot(t, data[j].iloc[:, i - 1], '.-', label=col_names[i - 1] if j == 0 else '')
+            ax.legend()
+            fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        plt.tight_layout(pad=2)
+        plt.savefig(file_path + file_name + '.png')
+        plt.close()
+    return params
