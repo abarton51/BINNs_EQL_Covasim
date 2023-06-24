@@ -12,12 +12,21 @@ import pylab as pl
 import sciris as sc
 import numpy as np
 import matplotlib.pyplot as plt
-from Notebooks.utils import get_case_name, import_new_variants
+from utils import get_case_name, import_new_variants
 
-# the effective lower and upper bounds for the tracing prob
-# eff_ub is the float value that identifies the data
-eff_lb, eff_ub = 0.0, 0.3
-chi_type = 'constant'
+class ModelParams():
+    
+    def __init__(self, test_prob=0.1, trace_lb=0, trace_ub=0.3, chi_type='constant', keep_d=True, dynamic=True):
+        global chi_type_global
+        global eff_ub_global
+        chi_type_global = chi_type
+        eff_ub_global = trace_ub
+        
+        self.test_prob = test_prob
+        self.trace_lb = trace_lb
+        self.keep_d = keep_d
+        self.dynamic = dynamic
+        return
 
 class store_compartments(cv.Analyzer):
 
@@ -133,7 +142,7 @@ def get_dynamic_eff(ftype, eff_ub):
 
 def dynamic_tracing(sim):
 
-    tracing_array = get_dynamic_eff(chi_type, eff_ub)
+    tracing_array = get_dynamic_eff(chi_type_global, eff_ub_global)
     # get tracing intervention
     for cur_inter in sim['interventions']:
         if isinstance(cur_inter, cv.contact_tracing):
@@ -150,20 +159,25 @@ def dynamic_tracing(sim):
 
 
 
-def test_data_generator():
+def drums_data_generator(model_params=None):
+    if model_params==None:
+        model_params = ModelParams()
+    
+    keep_d = model_params.keep_d
+    dynamic = model_params.dynamic
     # Define the testing and contact tracing interventions (hyperparameter)
-    test_scale = 0.1
+    test_scale = model_params.test_prob
     # test_quarantine_scale = 0.1   min(test_scale * 4, 1)
     tp = cv.test_prob(symp_prob=test_scale, asymp_prob=0.001, symp_quar_prob=0.3,
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
-    trace_prob = {key: val*eff_ub for key,val in trace_prob.items()}
+    trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
-    keep_d = True
+    keep_d = keep_d
     population = int(200e3)
-    case_name = get_case_name(population, test_scale, eff_ub, keep_d, dynamic=True)
-    case_name = '_'.join([case_name, chi_type])
+    case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=dynamic)
+    case_name = '_'.join([case_name, chi_type_global])
     # Define the default parameters
     pars = dict(
         pop_type      = 'hybrid',
@@ -218,7 +232,7 @@ def test_data_generator():
     # prepare the corresponding parameters of compartmental model
     population = sim['pop_size']
     params = {}
-    tracing_array = get_dynamic_eff(chi_type, eff_ub)
+    tracing_array = get_dynamic_eff(chi_type_global, eff_ub_global)
     params['tracing_array'] = tracing_array
     params['population'] = population
     contacts = sim.pars['contacts']
@@ -237,7 +251,7 @@ def test_data_generator():
     params['delta'] = severe_probs * crit_probs * 1 / sim.pars['dur']['crit2die']['par1']
     params['data'] = data
     params['dynamic_tracing'] = True
-    params['eff_ub'] = eff_ub
+    params['eff_ub'] = eff_ub_global
     file_name = 'covasim_'+ case_name + '.joblib'
     file_path = '../Data/covasim_data/drums_data'
     joblib.dump(params, os.path.join(file_path, file_name), compress=True)

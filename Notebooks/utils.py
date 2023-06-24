@@ -39,10 +39,6 @@ def get_case_name(population, test_prob, trace_prob, keep_d, dynamic=False, chi_
         file_name += '_' + chi_type
     return file_name
 
-def get_case_name_drums(date):
-    file_name = str(date)
-    return file_name
-
 def plot_loss_convergence(total_train_losses, total_val_losses, rel_save_thresh, file_path):
     # find where errors decreased
     train_idx, train_loss, val_idx, val_loss = [], [], [], []
