@@ -16,12 +16,13 @@ from utils import get_case_name, import_new_variants
 
 class ModelParams():
     
-    def __init__(self, test_prob=0.1, trace_lb=0, trace_ub=0.3, chi_type='constant', keep_d=True, dynamic=True):
+    def __init__(self, population=int(200e3), test_prob=0.1, trace_lb=0, trace_ub=0.3, chi_type='constant', keep_d=True, dynamic=True):
         global chi_type_global
         global eff_ub_global
         chi_type_global = chi_type
         eff_ub_global = trace_ub
         
+        self.population = population
         self.test_prob = test_prob
         self.trace_lb = trace_lb
         self.keep_d = keep_d
@@ -160,6 +161,17 @@ def dynamic_tracing(sim):
 
 
 def drums_data_generator(model_params=None):
+    '''
+    Data generation function that takes in the model parameters for the COVASIM simulation
+    and interacts with the covaism module in order to simulate, save, and store data.
+    
+    Args:
+        model_params (Object): ModelParams object that stores covasim model parameters.
+    
+    Returns:
+        None
+    '''
+    # if no model_params is specified then instantiate ModelParams with default parameter values
     if model_params==None:
         model_params = ModelParams()
     
@@ -175,7 +187,7 @@ def drums_data_generator(model_params=None):
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
     keep_d = keep_d
-    population = int(200e3)
+    population = model_params.population
     case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=dynamic)
     case_name = '_'.join([case_name, chi_type_global])
     # Define the default parameters
