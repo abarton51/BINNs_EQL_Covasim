@@ -244,8 +244,8 @@ class BINNCovasim_DRUMS(nn.Module):
         self.beta_ub = 0.3
         self.tau_lb = 0.1
         self.tau_ub =  0.3 #  params['tau_ub']
-        self.mu_lb = 0.1
-        self.mu_ub = 0.9
+        self.mu_lb = 0.01
+        self.mu_ub = 0.5
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
@@ -275,7 +275,7 @@ class BINNCovasim_DRUMS(nn.Module):
         self.pde_loss_weight = 1e0
         self.eta_loss_weight = 1e5
         self.tau_loss_weight = 1e5
-        self.mu_loss_weight = 1e5
+        self.mu_loss_weight = 1e3
 
         # proportionality constant
         self.gamma = 0.2
@@ -381,11 +381,11 @@ class BINNCovasim_DRUMS(nn.Module):
         
         '''Symptomatic Diagnosis rate: mu_MLP'''
         #-----------------------------------------------------------------------#
-        # store inputs of mu, (Y), into tensor of floats
-        y_tensor = torch.Tensor(u[:,[4]]).float().to(inputs.device)
-        # evaluate mu_MLP(Y)
+        # store inputs of mu, (Y, F), into tensor of floats
+        y_tensor = torch.Tensor(u[:,[4, 8]]).float().to(inputs.device)
+        # evaluate mu_MLP(Y, F)
         mu0 = self.mu_func(y_tensor)
-        # transform mu_MLP(A, Y) into the interval [mu_lb, mu_ub]
+        # transform mu_MLP(Y, F) into the interval [mu_lb, mu_ub]
         mu = self.mu_lb + (self.mu_ub - self.mu_lb) * mu0
         #-----------------------------------------------------------------------#
         
@@ -457,13 +457,16 @@ class BINNCovasim_DRUMS(nn.Module):
         self.tau_y_loss = 0
         self.tau_y_loss += self.tau_loss_weight * torch.where(dtau[:,1] < 0, dtau[:,1] ** 2, torch.zeros_like(dtau[:,1]))
         
-        # constraint on tau function
+        # constraint on mu function
         dmu = Gradient(mu, y_tensor, order=1)
         self.mu_y_loss = 0
-        self.mu_y_loss += self.mu_loss_weight * torch.where(dmu[:,1] < 0, dmu[:,1] ** 2, torch.zeros_like(dmu[:,1]))
+        self.mu_y_loss += self.mu_loss_weight * torch.where(dmu[:,0] < 0, dmu[:,0] ** 2, torch.zeros_like(dmu[:,0]))
+        
+        self.mu_f_loss = 0
+        self.mu_f_loss += self.mu_loss_weight * torch.where(dmu[:,1] < 0, dmu[:,1] ** 2, torch.zeros_like(dmu[:,1]))
 
         if return_mean:
-            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss + self.mu_y_loss)
+            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss + self.mu_y_loss + self.mu_f_loss)
         else:
             return pde_loss
 
