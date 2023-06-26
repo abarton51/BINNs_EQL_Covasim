@@ -562,18 +562,20 @@ class BINNCovasim_DRUMS(nn.Module):
 #--------------------------------Original COVASIM_BINN by Xin Li--------------------------------#
 class main_MLP(nn.Module):
     '''
-    Construct MLP surrogate model for the solution of the governing PDE.
-    Includes three hidden layers with 128 sigmoid-activated neurons. Output
-    is softplus-activated to keep predicted cell densities non-negative.
+    Construct MLP surrogate model for the solution of the governing ODE system.
+    Includes three hidden layers. The first with 512 neurons and the latter two with 
+    256 neurons. All neurons in hidden layers are ReLU-activated. Output
+    is softmax-activated to keep predicted values of S,T,E,A,Y,D,Q,R,F between 0 and 1
+    and adding up to one since they are dimensionless ratios of the population.
 
     Inputs:
-        scale (float): output scaling factor, defaults to carrying capacity
+        num_outputs (int): number of outputs
 
     Args:
-        inputs (torch tensor): t with shape (N, 1)
+        inputs (torch tensor): time vector, t, with shape (N, 1)
 
     Returns:
-        outputs (torch tensor): predicted u values with shape (N, 9)
+        outputs (torch tensor): predicted u = (S, T, E, A, Y, D, Q, R, F) values with shape (N, 9)
     '''
 
     def __init__(self, num_outputs):
@@ -595,18 +597,18 @@ class main_MLP(nn.Module):
 
 class infect_rate_MLP(nn.Module):
     '''
-    Construct MLP surrogate model for the solution of the governing PDE.
-    Includes three hidden layers with 128 sigmoid-activated neurons. Output
-    is softplus-activated to keep predicted cell densities non-negative.
+    Construct MLP surrogate model for the contact rate.
+    Includes one hidden layer with 256 ReLU-activated neurons. Output
+    is sigmoid-activated to keep predicted rates between 0 and 1.
 
     Inputs:
-        scale (float): output scaling factor, defaults to carrying capacity
+        N/A
 
     Args:
-        inputs (torch tensor): t with shape (N, 9)
+        inputs (torch tensor): S, A, Y with shape (N, 3)
 
     Returns:
-        outputs (torch tensor): predicted u values with shape (N, 3)
+        outputs (torch tensor): predicted contact rate, eta(S, A, Y), values with shape (N, 1)
     '''
 
     def __init__(self):
@@ -625,24 +627,25 @@ class infect_rate_MLP(nn.Module):
 
 class beta_MLP(nn.Module):
     '''
-    Construct MLP surrogate model for the solution of the governing PDE.
-    Includes three hidden layers with 128 sigmoid-activated neurons. Output
-    is softplus-activated to keep predicted cell densities non-negative.
+    Construct MLP surrogate model for the effective tracing rate.
+    Includes one hidden layer with 256 ReLU-activated neurons. Output
+    is sigmoid-activated to keep predicted tracing rates, beta(S+A+Y), between 0 and 1.
 
     Inputs:
-        scale (float): output scaling factor, defaults to carrying capacity
+        N/A
 
     Args:
-        inputs (torch tensor): t with shape (N, 9)
+        inputs (torch tensor): S+A+Y with shape (N, 1)
 
     Returns:
-        outputs (torch tensor): predicted u values with shape (N, 3)
+        outputs (torch tensor): predicted beta(S+A+Y) values with shape (N, 1)
     '''
 
     def __init__(self):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
+            #input_features=1,
             layers=[256, 1],
             activation=nn.ReLU(),
             linear_output=False,
@@ -655,18 +658,18 @@ class beta_MLP(nn.Module):
 
 class tau_MLP(nn.Module):
     '''
-    Construct MLP surrogate model for the solution of the governing PDE.
-    Includes three hidden layers with 128 sigmoid-activated neurons. Output
-    is softplus-activated to keep predicted cell densities non-negative.
+    Construct MLP surrogate model for the diagnoses rate of quarantined invidividuals.
+    Includes one hidden layer with 256 ReLU-activated neurons. Output
+    is sigmoid-activated to keep predicted rates between 0 and 1.
 
     Inputs:
-        scale (float): output scaling factor, defaults to carrying capacity
+        N/A
 
     Args:
-        inputs (torch tensor): t with shape (N, 9)
+        inputs (torch tensor): A, Y values with shape (N, 2)
 
     Returns:
-        outputs (torch tensor): predicted u values with shape (N, 3)
+        outputs (torch tensor): predicted diagnoses rates of quarantined, tau(A, Y), values with shape (N, 1)
     '''
 
     def __init__(self):
@@ -850,6 +853,7 @@ class BINNCovasim(nn.Module):
         # contact_rate = self.contact_rate(u[:,[0,3,4]])  # what to input contact_rate MLP
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
         # ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
+        
         yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device) # 5, 7, 8
         beta0 = self.beta_func(yq_tensor)
         # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
