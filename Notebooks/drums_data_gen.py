@@ -275,3 +275,6 @@ def drums_data_generator(model_params=None):
     file_name = 'covasim_'+ case_name + '.joblib'
     file_path = '../Data/covasim_data/drums_data'
     joblib.dump(params, os.path.join(file_path, file_name), compress=True)
+
+
+    #hello its jordan
