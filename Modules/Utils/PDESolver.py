@@ -304,7 +304,7 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
 
 def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type):
     '''
-    Simulator for the STEAYDQRF model.
+    Simulator for the STEAYDQRF model using numerical integration.
     
     Args:
         RHS (array): array of derivative values of ODE system.

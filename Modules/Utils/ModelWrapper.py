@@ -508,7 +508,7 @@ class ModelWrapper():
     def save(self, save_name):
         
         '''
-        Saves model weights and optionally optimizer weights.
+        Saves model weights and optionally optimizer and/or regularizer weights.
         '''
         
         # save model weights
@@ -529,7 +529,7 @@ class ModelWrapper():
              device=None):
         
         '''
-        Loads model weights and optionally optimizer weights.
+        Loads model weights and optionally optimizer and/or regularizer weights.
         '''
         
         # load model weights
