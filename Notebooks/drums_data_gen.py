@@ -16,7 +16,15 @@ from utils import get_case_name, import_new_variants
 
 class ModelParams():
     
-    def __init__(self, population=int(200e3), test_prob=0.1, trace_lb=0, trace_ub=0.3, chi_type='constant', keep_d=True, dynamic=True):
+    def __init__(self, 
+                 population=int(200e3), 
+                 test_prob=0.1, 
+                 trace_lb=0, 
+                 trace_ub=0.3, 
+                 chi_type='constant', 
+                 keep_d=True, 
+                 dynamic=True):
+        
         global chi_type_global
         global eff_ub_global
         chi_type_global = chi_type
