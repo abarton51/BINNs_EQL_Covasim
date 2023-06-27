@@ -1,10 +1,9 @@
 import os.path
-import sys
-sys.path.append('../')
 
 import joblib
 import pandas as pd
-from scipy.stats import beta, bernoulli
+from scipy.stats import beta
+from functools import reduce
 
 import covasim.covasim as cv
 import covasim.covasim.utils as cvu
@@ -12,7 +11,9 @@ import pylab as pl
 import sciris as sc
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import get_case_name, import_new_variants
+from Notebooks.utils import get_case_name, import_new_variants
+import matplotlib
+matplotlib.use('Agg')
 
 class ModelParams():
     
@@ -77,7 +78,7 @@ class store_compartments(cv.Analyzer):
         self.F.append(ppl.dead.sum())
         return
 
-    def plot(self, given_str, fig_name=None):
+    def plot(self, given_str):
         pl.figure()
         for c in given_str:
             pl.plot(self.t, self.__getattribute__(c), label=c)
@@ -87,13 +88,9 @@ class store_compartments(cv.Analyzer):
         sc.setylim() # Reset y-axis to start at 0
         sc.commaticks() # Use commas in the y-axis labels
         # pl.show()
-        if fig_name:
-            plot_name = 'compartments_' + fig_name
-        else:
-            plot_name = 'compartments'
-        pl.savefig('../Notebooks/figs/drums/' + plot_name + '.png')
+        pl.savefig('../Notebooks/figs/' + 'compartments' + '.png')
         return
-    
+
 def get_dynamic_mask(ftype, n):
     if ftype == 'logistic':
         res = np.zeros(len(n))
@@ -123,7 +120,6 @@ def get_dynamic_eff(ftype, eff_ub):
         res += (t < 75) * slope * (t + 1)
         res += (t >= 75) * (t < 150) * eff_ub
         res -= (t >= 75) * (t < 150) * (slope * (t - 75 + 1))
-        res_all = res
     elif ftype == 'sin':
         times = np.arange(0, 200, 1)
         rad_times =  times * np.pi / 40.
@@ -168,13 +164,14 @@ def dynamic_tracing(sim):
 
 
 
-def drums_data_generator(model_params=None):
+def drums_data_generator_multi(model_params=None, n_runs=10):
     '''
     Data generation function that takes in the model parameters for the COVASIM simulation
     and interacts with the covaism module in order to simulate, save, and store data.
     
     Args:
         model_params (Object): ModelParams object that stores covasim model parameters.
+        n_runs (int): number of simulations to complete to computer sample means of results.
     
     Returns:
         None
@@ -182,10 +179,12 @@ def drums_data_generator(model_params=None):
     # if no model_params is specified then instantiate ModelParams with default parameter values
     if model_params==None:
         model_params = ModelParams()
-
+    
+    n_runs = 100
     keep_d = model_params.keep_d
     dynamic = model_params.dynamic
-    # Define the testing and contact tracing interventions (hyperparameter)
+    
+    # Define the testing and contact tracing interventions
     test_scale = model_params.test_prob
     # test_quarantine_scale = 0.1   min(test_scale * 4, 1)
     tp = cv.test_prob(symp_prob=test_scale, asymp_prob=0.001, symp_quar_prob=0.3,
@@ -194,9 +193,9 @@ def drums_data_generator(model_params=None):
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
-    keep_d = keep_d
+    keep_d = True
     population = model_params.population
-    case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=dynamic)
+    case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=True)
     case_name = '_'.join([case_name, chi_type_global])
     # Define the default parameters
     pars = dict(
@@ -219,40 +218,43 @@ def drums_data_generator(model_params=None):
     if have_new_variant:
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
-        
-    
-    # manually intialize
-    # sim.initialize()
-    # p = get_dynamic_mask('beta', sim['pop size'])
-    # assign attributes to people object
-    # sim.people.mask_comp = bernoulli.rvs(np.mean(p), sim['pop size'])
-    
-    sim.run()
-    sim.plot(to_plot=['new_infections_by_variant','new_infections', 'new_tests', 'new_diagnoses', 'cum_diagnoses', 'new_quarantined', 'test_yield'],
+    # sim.run()
+    msim = cv.MultiSim(sim)
+    msim.run(n_runs=n_runs, parallel=False, keep_people=True)
+    msim.mean()
+    msim.plot(to_plot=['new_infections_by_variant','new_infections', 'new_tests', 'new_diagnoses', 'cum_diagnoses', 'new_quarantined', 'test_yield'],
              do_show=False)
     plt.savefig('../Notebooks/figs/drums/' + fig_name + '.png', dpi=300)
     plt.close()
 
+    data_replicates = []
+    for i in range(n_runs):
+        get_data = msim.sims[i].get_analyzer('get_compartments')  # Retrieve by label
 
-    get_data = sim.get_analyzer('get_compartments')  # Retrieve by label
+        compartments = 'STEAYDQRF' if get_data.keep_D else 'STEAYQRF'
+        # get_data.plot(compartments)
+        # res = None
+        # for c in compartments:
+        #     if res is None:
+        #         res = np.array(get_data.__getattribute__(c))
+        #     else:
+        #         res += np.array(get_data.__getattribute__(c))
+        # assert res.max() == sim['pop_size']
+        data = pd.DataFrame()
+        for c in compartments:
+            data[c] = np.array(get_data.__getattribute__(c))
+        data_replicates.append(data)
+    df_final = reduce(lambda x, y: x + y, data_replicates)
+    df_final /= n_runs
 
-    compartments = 'STEAYDQRF' if get_data.keep_D else 'STEAYQRF'
-    get_data.plot(compartments, fig_name=fig_name)
-    res = None
-    for c in compartments:
-        if res is None:
-            res = np.array(get_data.__getattribute__(c))
-        else:
-            res += np.array(get_data.__getattribute__(c))
-    assert res.max() == sim['pop_size']
-    data = pd.DataFrame()
-    for c in compartments:
-        data[c] = np.array(get_data.__getattribute__(c))
+
+
+
 
     # prepare the corresponding parameters of compartmental model
     population = sim['pop_size']
     params = {}
-    tracing_array = get_dynamic_eff(chi_type_global, eff_ub_global)
+    tracing_array = get_dynamic_eff(chi_type, eff_ub)
     params['tracing_array'] = tracing_array
     params['population'] = population
     contacts = sim.pars['contacts']
@@ -264,14 +266,15 @@ def drums_data_generator(model_params=None):
     params['tau_lb'] = 0 # tp.asymp_quar_prob
     params['tau_ub'] = tp.symp_quar_prob
     params['lamda'] = 1 / 10.0
-    params['p_asymp'] = 1 - sim.people.symp_prob.mean()
+    params['p_asymp'] = 1 - msim.sims[0].people.symp_prob.mean()
     params['n_contacts'] = sum(contacts.values())
-    severe_probs = sim.people.severe_prob.mean()
-    crit_probs = sim.people.crit_prob.mean()
+    severe_probs =  msim.sims[0].people.severe_prob.mean()
+    crit_probs =  msim.sims[0].people.crit_prob.mean()
     params['delta'] = severe_probs * crit_probs * 1 / sim.pars['dur']['crit2die']['par1']
-    params['data'] = data
+    params['data'] = data_replicates.copy() #df_final
     params['dynamic_tracing'] = True
     params['eff_ub'] = eff_ub_global
-    file_name = 'covasim_'+ case_name + '.joblib'
+    file_name = 'covasim_'+ case_name + '_' + str(n_runs)
+    file_name += '.joblib'
     file_path = '../Data/covasim_data/drums_data'
     joblib.dump(params, os.path.join(file_path, file_name), compress=True)
