@@ -645,7 +645,6 @@ class beta_MLP(nn.Module):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
-            #input_features=1,
             layers=[256, 1],
             activation=nn.ReLU(),
             linear_output=False,
@@ -774,8 +773,6 @@ class BINNCovasim(nn.Module):
         else:
             self.weights_c = torch.tensor(np.array([1, 1, 1, 1, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
         # self.yita_weight = 0
-        # self.dfdt_weight = 1e10
-        # self.drdt_weight = 1e10
         self.pde_loss_weight = 1e0
         self.eta_loss_weight = 1e5
         self.tau_loss_weight = 1e5
@@ -844,29 +841,30 @@ class BINNCovasim(nn.Module):
 
         # partial derivative computations
         u = outputs.clone()
-        # d1 = Gradient(u, inputs, order=1)
-        # ut = d1[:, 0][:, None]
+        
+        # h(t) values
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
         # chi_t = torch.nn.functional.interpolate()
+        
         cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device) # t,
         eta = self.eta_func(cat_tensor)
-        # contact_rate = self.contact_rate(u[:,[0,3,4]])  # what to input contact_rate MLP
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
-        # ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
         
         yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device) # 5, 7, 8
         beta0 = self.beta_func(yq_tensor)
         # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
+        # beta(S+A+Y) * h(t)
         beta = chi_t * beta0
+        
         ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
         tau0 = self.tau_func(ay_tensor)
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0 # quarantine_test[:, 0][:, None]
-        # theta = 0.1 * contact_rate[:, 1][:, None]
-        # epsilon = 0.001 * contact_rate[:, 2][:, None]
+        
         # STEAYDQRF model, loop through each compartment
         s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
                                     u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
                                     u[:, 8][:, None]
+        # (mu * Y + tau * Q)
         new_d = self.mu * y + tau * q
         for i in range(self.n_com):
             d1 = Gradient(u[:, i], inputs, order=1)
@@ -923,9 +921,6 @@ class BINNCovasim(nn.Module):
         self.eta_y_loss = 0
         self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
 
-        # self.eta_chi_loss = 0
-        # self.eta_chi_loss += self.eta_loss_weight * torch.where(deta[:,3] > 0, deta[:,3] ** 2, torch.zeros_like(deta[:,3]))
-
         # constraint on tau function
         dtau = Gradient(tau, ay_tensor, order=1)
         self.tau_a_loss = 0
@@ -980,11 +975,9 @@ class BINNCovasim(nn.Module):
             elif i == 6:
                 # dR
                 RHS = self.lamda * (a + y + q)
-                # self.drdt_loss = self.drdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
             elif i == 7:
                 # dF
                 RHS = self.delta * (y + q)
-                # self.dfdt_loss = self.dfdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
                 
             if i in [0, 1, 2, 3, 4, 5]:
                 pde_loss += (LHS - RHS) ** 2
@@ -993,7 +986,7 @@ class BINNCovasim(nn.Module):
 
 
         if return_mean:
-            return torch.mean(pde_loss)  #  + self.dfdt_loss + self.drdt_loss
+            return torch.mean(pde_loss)
         else:
             return pde_loss
 
@@ -1016,7 +1009,7 @@ class BINNCovasim(nn.Module):
 
         # compute surface loss
         self.gls_loss_val = self.surface_weight * self.gls_loss(pred, true)
-        # self.gls_loss_val += self.surface_weight * self.kl_loss(torch.log(pred), true)
+        
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
             if self.keep_d:
