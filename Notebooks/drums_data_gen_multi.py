@@ -164,7 +164,7 @@ def dynamic_tracing(sim):
 
 
 
-def drums_data_generator_multi(model_params=None, n_runs=10):
+def drums_data_generator_multi(model_params=None, num_runs=10):
     '''
     Data generation function that takes in the model parameters for the COVASIM simulation
     and interacts with the covaism module in order to simulate, save, and store data.
@@ -180,7 +180,7 @@ def drums_data_generator_multi(model_params=None, n_runs=10):
     if model_params==None:
         model_params = ModelParams()
     
-    n_runs = 100
+    n_runs = num_runs
     keep_d = model_params.keep_d
     dynamic = model_params.dynamic
     
@@ -254,7 +254,7 @@ def drums_data_generator_multi(model_params=None, n_runs=10):
     # prepare the corresponding parameters of compartmental model
     population = sim['pop_size']
     params = {}
-    tracing_array = get_dynamic_eff(chi_type, eff_ub)
+    tracing_array = get_dynamic_eff(chi_type_global, eff_ub_global)
     params['tracing_array'] = tracing_array
     params['population'] = population
     contacts = sim.pars['contacts']

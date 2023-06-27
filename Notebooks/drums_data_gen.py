@@ -23,7 +23,8 @@ class ModelParams():
                  trace_ub=0.3, 
                  chi_type='constant', 
                  keep_d=True, 
-                 dynamic=True):
+                 dynamic=True,
+                 masking=False):
         
         global chi_type_global
         global eff_ub_global
@@ -35,7 +36,35 @@ class ModelParams():
         self.trace_lb = trace_lb
         self.keep_d = keep_d
         self.dynamic = dynamic
+        self.masking = masking
         return
+    
+class masking__(cv.Intervention):
+  def __init__(self, model_params=None, thresh_scale=None, rel_sus=0.5, *args, **kwargs):
+      
+    super().__init__(**kwargs)
+    self.population    = model_params.population
+    self.thresh_scale  = thresh_scale
+    self.rel_sus       = rel_sus
+    return
+
+  def initialize(self,sim):
+    super().initialize()
+    self.population    = int(len(sim.people))
+    self.num_dead      = sim.people.dead.sum()
+    self.num_diagnosed = sim.people.diagnosed.sum()
+    self.masking       = np.random.choice([True,False],size=len(sim.people),p=[0.40,0.60])
+    self.thresh        = self.population * self.thresh_scale
+    self.tvec          = sim.tvec
+
+  def apply(self,sim):
+    if self.num_dead + self.num_diagnosed > self.thresh:
+        print('applied')
+        sim.people.rel_sus[self.masking] = self.rel_sus
+    else:
+      None
+    return
+
 
 class store_compartments(cv.Analyzer):
 
@@ -185,6 +214,7 @@ def drums_data_generator(model_params=None):
 
     keep_d = model_params.keep_d
     dynamic = model_params.dynamic
+    masking = model_params.masking
     # Define the testing and contact tracing interventions (hyperparameter)
     test_scale = model_params.test_prob
     # test_quarantine_scale = 0.1   min(test_scale * 4, 1)
@@ -192,29 +222,47 @@ def drums_data_generator(model_params=None):
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
+    mk = masking__(model_params, thresh_scale=0.0, rel_sus=0.0)
+
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
     keep_d = keep_d
     population = model_params.population
     case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=dynamic)
     case_name = '_'.join([case_name, chi_type_global])
-    # Define the default parameters
-    pars = dict(
-        pop_type      = 'hybrid',
-        pop_size      = population,
-        pop_infected  = population / 500,
-        start_day     = '2020-02-01',
-        end_day       = '2020-08-01',
-        interventions = [tp, ct, dynamic_tracing],
-        analyzers=store_compartments(keep_d, label='get_compartments'),
-        asymp_factor = 0.5
-    )
+    
+    if masking:
+        # Define the default parameters
+        pars = dict(
+            pop_type      = 'hybrid',
+            pop_size      = population,
+            pop_infected  = population / 500,
+            start_day     = '2020-02-01',
+            end_day       = '2020-08-01',
+            interventions = [tp, ct, dynamic_tracing, mk],
+            analyzers=store_compartments(keep_d, label='get_compartments'),
+            asymp_factor = 0.5
+        )
+    else:
+         # Define the default parameters
+        pars = dict(
+            pop_type      = 'hybrid',
+            pop_size      = population,
+            pop_infected  = population / 500,
+            start_day     = '2020-02-01',
+            end_day       = '2020-08-01',
+            interventions = [tp, ct, dynamic_tracing],
+            analyzers=store_compartments(keep_d, label='get_compartments'),
+            asymp_factor = 0.5
+        )
 
     # consider new variant
     have_new_variant = False
 
     # Create, run, and plot the simulation
     fig_name = case_name
+    if masking:
+        fig_name = fig_name + '_masking'
     sim = cv.Sim(pars)
     if have_new_variant:
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
@@ -272,6 +320,6 @@ def drums_data_generator(model_params=None):
     params['data'] = data
     params['dynamic_tracing'] = True
     params['eff_ub'] = eff_ub_global
-    file_name = 'covasim_'+ case_name + '.joblib'
+    file_name = 'covasim_'+ fig_name + '.joblib'
     file_path = '../Data/covasim_data/drums_data'
     joblib.dump(params, os.path.join(file_path, file_name), compress=True)
