@@ -41,14 +41,13 @@ class ModelParams():
     
 class masking__(cv.Intervention):
   def __init__(self, model_params=None, thresh_scale=None, rel_sus=0.5, *args, **kwargs):
-      
     super().__init__(**kwargs)
     self.population    = model_params.population
     self.thresh_scale  = thresh_scale
     self.rel_sus       = rel_sus
     return
 
-  def initialize(self,sim):
+  def initialize(self, sim):
     super().initialize()
     self.population    = int(len(sim.people))
     self.num_dead      = sim.people.dead.sum()
@@ -57,12 +56,16 @@ class masking__(cv.Intervention):
     self.thresh        = self.population * self.thresh_scale
     self.tvec          = sim.tvec
 
-  def apply(self,sim):
+  def apply(self, sim):
     if self.num_dead + self.num_diagnosed > self.thresh:
         print('applied')
         sim.people.rel_sus[self.masking] = self.rel_sus
+    elif self.num_dead + self.num_diagnosed == 0:
+        print(self.num_dead)
+        sim.people.rel_sus[self.masking] = self.rel_sus
     else:
-      None
+        print('not applied')
+        sim.people.rel_sus[self.masking] = self.rel_sus
     return
 
 
@@ -212,6 +215,7 @@ def drums_data_generator(model_params=None):
     if model_params==None:
         model_params = ModelParams()
 
+    population = model_params.population
     keep_d = model_params.keep_d
     dynamic = model_params.dynamic
     masking = model_params.masking
@@ -226,13 +230,12 @@ def drums_data_generator(model_params=None):
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
-    keep_d = keep_d
-    population = model_params.population
+
     case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=dynamic)
     case_name = '_'.join([case_name, chi_type_global])
     
     if masking:
-        # Define the default parameters
+        # Define the default parameters if there is masking intervention
         pars = dict(
             pop_type      = 'hybrid',
             pop_size      = population,
@@ -263,6 +266,7 @@ def drums_data_generator(model_params=None):
     fig_name = case_name
     if masking:
         fig_name = fig_name + '_masking'
+        
     sim = cv.Sim(pars)
     if have_new_variant:
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
