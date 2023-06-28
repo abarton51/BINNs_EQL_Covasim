@@ -50,13 +50,13 @@ class masking__(cv.Intervention):
   def initialize(self, sim):
     super().initialize()
     self.population    = int(len(sim.people))
-    self.num_dead      = sim.people.dead.sum()
-    self.num_diagnosed = sim.people.diagnosed.sum()
     self.masking       = np.random.choice([True,False],size=len(sim.people),p=[0.40,0.60])
     self.thresh        = self.population * self.thresh_scale
     self.tvec          = sim.tvec
 
   def apply(self, sim):
+    self.num_dead      = sim.people.dead.sum()
+    self.num_diagnosed = sim.people.diagnosed.sum()
     if self.num_dead + self.num_diagnosed > self.thresh:
         print('applied')
         sim.people.rel_sus[self.masking] = self.rel_sus
