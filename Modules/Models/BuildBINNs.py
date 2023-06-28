@@ -1035,17 +1035,22 @@ class identity_MLP(nn.Module):
             averaged/denoised data.
     '''
 
-    def __init__(self, num_outputs):
+    def __init__(self, num_outputs, smooth_data):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=1,
             layers=[num_outputs],
             activation=nn.Identity(),
             linear_output=False,
-            output_activation=None) 
+            output_activation=None)
+        self.smooth_data = smooth_data
 
     def forward(self, inputs):
-        outputs = self.mlp(inputs)
+        inputs = (inputs * 182).int().numpy()
+        print(inputs.shape)
+        split = np.where(inputs==self.p)[0]
+        print(split)
+        outputs = self.smooth_data[split]
 
         return outputs
 
@@ -1081,7 +1086,7 @@ class MLPComponentsCovasim(nn.Module):
         self.beta_ub = 0.3
         self.tau_lb = 0.1
         self.tau_ub =  0.3
-        self.fit_surface = identity_MLP()
+        self.surface_fitter = identity_MLP(self.n_com, smooth_data)
 
         # pde functions/components
         self.eta_func = infect_rate_MLP()
@@ -1143,14 +1148,14 @@ class MLPComponentsCovasim(nn.Module):
         # cache input batch for pde loss
         self.inputs = inputs
 
-        return self.surface_fitter(self.inputs)
+        return self.surface_fitter(self.inputs) # returns self.surface_fitter(self.inputs) which is equal to smooth_data.copy()
 
     def pde_loss(self, inputs, outputs, return_mean=True):
 
         pde_loss = 0
         # unpack inputs
         t = inputs[:, 0][:, None]
-        N = len(t)
+        N = t.shape[0]
 
         # partial derivative computations
         u = outputs.clone()
@@ -1160,13 +1165,12 @@ class MLPComponentsCovasim(nn.Module):
         
         # h(t) values
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
-        # chi_t = torch.nn.functional.interpolate()
         
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device) # t,
+        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
         eta = self.eta_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
         
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device) # 5, 7, 8
+        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device)
         beta0 = self.beta_func(yq_tensor)
         # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
         # beta(S+A+Y) * h(t)
@@ -1174,7 +1178,7 @@ class MLPComponentsCovasim(nn.Module):
         
         ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
         tau0 = self.tau_func(ay_tensor)
-        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0 # quarantine_test[:, 0][:, None]
+        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
         
         # STEAYDQRF model, loop through each compartment
         s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
@@ -1246,9 +1250,9 @@ class MLPComponentsCovasim(nn.Module):
         self.tau_y_loss += self.tau_loss_weight * torch.where(dtau[:,1] < 0, dtau[:,1] ** 2, torch.zeros_like(dtau[:,1]))
 
         if return_mean:
-            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss) #
+            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss)
         else:
-            return pde_loss  # + self.D_loss + self.G_loss + self.T_loss
+            return pde_loss
 
     def pde_loss_no_d(self, inputs, outputs, return_mean=True):
         """ pde loss for the case of removing compartment D"""
@@ -1258,6 +1262,9 @@ class MLPComponentsCovasim(nn.Module):
 
         # partial derivative computations
         u = outputs.clone()
+        u_front = u[:N-2,:]
+        u_back = u[2:,:]
+        ut = (u_back - u_front) / 2.
 
         contact_rate = self.contact_rate(u[:,[0,3,4]])  # what to input contact_rate MLP
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * contact_rate[:, 0][:, None]
@@ -1266,8 +1273,8 @@ class MLPComponentsCovasim(nn.Module):
         s, tq, e, a, y, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
                                     u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None]
         for i in range(self.n_com):
-            d1 = Gradient(u[:, i], inputs, order=1)
-            ut = d1[:, 0][:, None]
+            # d1 = Gradient(u[:, i], inputs, order=1)
+            # ut = d1[:, 0][:, None]
             LHS = ut / self.t_max_real
             new_d = self.mu * y + tau * q
             if i == 0:
@@ -1296,7 +1303,7 @@ class MLPComponentsCovasim(nn.Module):
                 RHS = self.delta * (y + q)
                 
             if i in [0, 1, 2, 3, 4, 5]:
-                pde_loss += (LHS - RHS) ** 2
+                pde_loss += (LHS[:,i] - RHS) ** 2
 
         pde_loss *= self.pde_loss_weight
 
