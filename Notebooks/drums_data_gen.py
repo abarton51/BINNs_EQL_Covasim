@@ -39,8 +39,8 @@ class ModelParams():
         self.masking = masking
         return
     
-class masking__(cv.Intervention):
-  def __init__(self, model_params=None, thresh_scale=None, rel_sus=0.5, *args, **kwargs):
+class masking(cv.Intervention):
+  def __init__(self, model_params=None, thresh_scale=None, rel_sus=None, *args, **kwargs):
     super().__init__(**kwargs)
     self.population    = model_params.population
     self.thresh_scale  = thresh_scale
@@ -50,22 +50,21 @@ class masking__(cv.Intervention):
   def initialize(self, sim):
     super().initialize()
     self.population    = int(len(sim.people))
-    self.masking       = np.random.choice([True,False],size=len(sim.people),p=[0.40,0.60])
     self.thresh        = self.population * self.thresh_scale
     self.tvec          = sim.tvec
 
   def apply(self, sim):
     self.num_dead      = sim.people.dead.sum()
     self.num_diagnosed = sim.people.diagnosed.sum()
+    self.p             = np.exp((0.001+((self.num_diagnosed+self.num_dead))/(self.population/10)-0.005*(sim.t)))
+    self.p             = (self.p/(1+self.p))-0.35
+    self.immunocomp    = np.random.choice([True,False],size=len(sim.people),p=[0.03,0.97])
+    self.masking       = np.random.choice([True,False],size=len(sim.people),p=[self.p,(1-self.p)])
     if self.num_dead + self.num_diagnosed > self.thresh:
-        print('applied')
-        sim.people.rel_sus[self.masking] = self.rel_sus
-    elif self.num_dead + self.num_diagnosed == 0:
-        print(self.num_dead)
-        sim.people.rel_sus[self.masking] = self.rel_sus
+        sim.people.rel_sus = np.where(True, self.masking,self.rel_sus*sim.people.rel_sus)
+        sim.people.rel_sus = np.where(True, self.immunocomp,self.rel_sus*sim.people.rel_sus)   
     else:
-        print('not applied')
-        sim.people.rel_sus[self.masking] = self.rel_sus
+       None
     return
 
 
@@ -226,7 +225,7 @@ def drums_data_generator(model_params=None):
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
-    mk = masking__(model_params, thresh_scale=0.0, rel_sus=0.0)
+    mk = masking(model_params, thresh_scale=0.0, rel_sus=0.0)
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
