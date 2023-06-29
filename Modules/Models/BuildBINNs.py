@@ -1580,7 +1580,7 @@ class MLPComponentsCV(nn.Module):
         # loss weights
         self.surface_weight = 1e2
         self.pde_weight = 1e4  # 1e4
-        
+
         if keep_d:
             self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float) # [1, 1, 1, 1000, 1, 1, 1000, 1, 1000]
         else:
@@ -1594,7 +1594,7 @@ class MLPComponentsCV(nn.Module):
         self.gamma = 0.2
 
         # number of samples for pde loss
-        self.num_samples = 1000 # QUESTION: What's going on here? What does it mean by number of sample? Samples for what?
+        self.num_samples = int(0.8 * 181) # QUESTION: What's going on here? What does it mean by number of sample? Samples for what?
 
         self.name = 'covasim_fitter'
 
@@ -1627,7 +1627,7 @@ class MLPComponentsCV(nn.Module):
         self.inputs = inputs
 
         # whatever we return here goes into the NN as an input for the loss function (??)
-        return self.u_tensor
+        return self.u
 
     def pde_loss(self, inputs, outputs, return_mean=True):
 
@@ -1662,7 +1662,7 @@ class MLPComponentsCV(nn.Module):
                                     u[:, 8][:, None]
         # (mu * Y + tau * Q)
         new_d = self.mu * y + tau * q
-        LHS = ut / self.t_max_real
+        LHS = ut
         for i in range(self.n_com):
             # d1 = Gradient(u[:, i], inputs, order=1) <------- We don't need this since we numerically approximated these
             # ut = d1[:, 0][:, None] <------------ Instead use the LHS matrix of derivatives where the column <-> compartment
@@ -1797,9 +1797,9 @@ class MLPComponentsCV(nn.Module):
         inputs = self.inputs
 
         # randomly sample from input domain
-        t = torch.randint(1, self.t_max_real, self.t_max_real, requires_grad=True)
-        u = self.u[t]
-        ut = self.ut[t]
+        t = torch.randint(1, self.t_max_real, (self.t_max_real, 1), requires_grad=False)
+        u = self.u[t-1]
+        ut = self.ut[t-1]
         # t = t * (self.t_max - self.t_min) + self.t_min
         inputs_rand = t.to(inputs.device)
         # inputs_rand = torch.cat([x, t], dim=1).float().to(inputs.device)
