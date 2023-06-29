@@ -69,21 +69,23 @@ def load_covasim_data(file_path, population, test_prob, trace_prob, keep_d, case
     file_name = 'covasim_' + str(case_name)
     params = joblib.load(file_path + file_name + '.joblib')
 
-    if plot and isinstance(params['data'], pd.DataFrame):
-        data = params['data']
-        n = data.shape[1]
-        col_names = list(data.columns)
+    if plot and isinstance(params['data'], pd.DataFrame):   
+        data = params['data']   
+        n = data.shape[1]   
+        col_names = list(data.columns)  
         t = np.arange(1, data.shape[0] + 1)
         # plot compartments
         fig = plt.figure(figsize=(10, 7))
-        for i in range(1, n + 1):
-            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i)
+        for i in range(1, n + 1):  
+            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i) 
             ax.plot(t, data.iloc[:, i - 1], '.-', label=col_names[i - 1])
             ax.legend()
             fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         plt.tight_layout(pad=2)
         plt.savefig(file_path + file_name + '.png')
         plt.close()
+
+
     if plot and isinstance(params['data'], list):
         data = params['data']
         n = data[0].shape[1]
@@ -120,35 +122,85 @@ def load_covasim_data_drums(file_path, population, keep_d, case_name, plot=True)
     file_name = 'covasim_' + str(case_name)
     params = joblib.load(file_path + file_name + '.joblib')
 
-    if plot and isinstance(params['data'], pd.DataFrame):
-        data = params['data']
-        n = data.shape[1]
+    if plot and isinstance(params['data'], pd.DataFrame):   #if plot is true and the data is a pd dataframe
+        data = params['data']   #declaring the data from covasim as data
+        n = data.shape[1]   #number of rows in data ??
         col_names = list(data.columns)
-        t = np.arange(1, data.shape[0] + 1)
-        # plot compartments
+        t = np.arange(1, data.shape[0] + 1)  #an array of numbers from 1 to number of rows plus 1
+        
+        
+        # plot compartments FOR ONE SIMULATION
         fig = plt.figure(figsize=(10, 7))
-        for i in range(1, n + 1):
-            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i)
-            ax.plot(t, data.iloc[:, i - 1], '.-', label=col_names[i - 1])
+        for i in range(1, n + 1):    #range from 1 to the number of rows plus 1
+            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i) #subplot with n divided by 3 and rounded up num rows, 3 num cols and the element goes in the ith place
+            ax.plot(t, data.iloc[:, i - 1], '.-', label=col_names[i - 1])   #plot t on x-axis, all rows of data and the i-1 column of data on the y- axis
             ax.legend()
             fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         plt.tight_layout(pad=2)
         plt.savefig(file_path + file_name + '.png')
         plt.close()
-    if plot and isinstance(params['data'], list):
+
+    if plot and isinstance(params['data'], list):   #if plot is true and data is a list? a list of dataframes maybe?
         data = params['data']
-        n = data[0].shape[1]
+        n = data[0].shape[1]    #num rows in the first element of the list
         col_names = list(data[0].columns)
-        t = np.arange(1, data[0].shape[0] + 1)
-        # plot compartments
+        t = np.arange(1, data[0].shape[0] + 1)  #an array of numbers from 1 to number of rows in first item plus 1
+       
+       
+       ##For averaging the simulations and plotting the average
+
+       #creating the dataframe with averages instead of a list of dataframes for mutliple simulations
+        days = list(range(0,data[0].shape[0] + 1)) #list of numbers to represent days
+        list_statesdata = []    #the list we are going to turn into a dataframe
+        list_statesdata.append(days)    #making the days the first item (column)
+
+        for element in range(len(data.columns)):  #going through the columns day by day and averaging
+            stateelements = []  #column for a state
+            for day in range(t):
+                
+                for df in data:
+                    templist = []
+                    templist.append(df.iloc[day,element])
+                avg = int(sum(templist)/len(templist))
+                stateelements.append(avg)
+
+
+        list_statesdata.append(stateelements)
+        avg_df = pd.DataFrame(data =list_statesdata, columns = ["S", "T", "E", "A", "Y", "D", "Q", "R", "F"])
+
+         # plot compartments  AVERAGE OF MULTIPLE SIMULATIONS   
+        m = avg_df.shape[1] #num rows in dataframe
         fig = plt.figure(figsize=(10, 7))
-        for i in range(1, n + 1):
-            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i)
-            for j in range(len(data)):
-                ax.plot(t, data[j].iloc[:, i - 1], '.-', label=col_names[i - 1] if j == 0 else '')
+        for i in range(1, m + 1):    #range from 1 to the number of rows plus 1
+            ax = fig.add_subplot(int(np.ceil(m / 3)), 3, i) #subplot with n divided by 3 and rounded up num rows, 3 num cols and the element goes in the ith place
+            ax.plot(avg_df.iloc[:,0], avg_df.iloc[:, i])
             ax.legend()
             fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         plt.tight_layout(pad=2)
         plt.savefig(file_path + file_name + '.png')
         plt.close()
+        
+        
+        
+        
+        
+        
+        '''
+        # plot compartments EACH SIMULATION ON TOP OF EACH OHTER
+        fig = plt.figure(figsize=(10, 7))
+        for i in range(1, n + 1):
+            ax = fig.add_subplot(int(np.ceil(n / 3)), 3, i)
+
+
+            for j in range(len(data)):  
+                #I think this for loop is for the multi simulation part, it would plot every iteration of each state on thier respective plot
+                ax.plot(t, data[j].iloc[:, i - 1], '.-', label=col_names[i - 1] if j == 0 else '')
+
+            ax.legend()
+            fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        plt.tight_layout(pad=2)
+        plt.savefig(file_path + file_name + '.png')
+        plt.close()
+
+        '''
     return params
