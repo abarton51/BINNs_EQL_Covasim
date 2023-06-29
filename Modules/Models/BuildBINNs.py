@@ -1541,6 +1541,7 @@ class MLPComponentsCV(nn.Module):
 
     Args:
         params (dict): dictionary of parameters from COVASIM model.
+        u_tensor (tensor): Tensor object containing matrix of approx. solutions and derivatives wrt time.
         t_max_real (float): the unscaled maximum time point (t).
         tracing_array (array): array values of tracing probabilities as a function of time (t).
         yita_lb (float): yita lower bound.
@@ -1575,10 +1576,9 @@ class MLPComponentsCV(nn.Module):
         # input extrema
         self.t_min = 0.0
         self.t_max = 1.0
-        self.t_max_real = t_max_real # what is max(t) in the real unaltered timescale
+        self.t_max_real = t_max_real # max(t) in the real unaltered timescale
 
         # loss weights
-        self.surface_weight = 1e2
         self.pde_weight = 1e4  # 1e4
 
         if keep_d:
@@ -1627,29 +1627,27 @@ class MLPComponentsCV(nn.Module):
         self.inputs = inputs
 
         # whatever we return here goes into the NN as an input for the loss function (??)
-        return self.u
+        return self.u[(inputs.long() - 1).flatten()]
 
     def pde_loss(self, inputs, outputs, return_mean=True):
 
         pde_loss = 0
         # unpack inputs
-        t = inputs[:, 0][:, None] / self.t_max_real
+        t = inputs.clone()
 
-        # partial derivative computations
+        # surface and partial derivative approximations
         u = outputs[:,:,0].clone()
         ut = outputs[:,:,1].clone()
         
         # h(t) values
-        chi_t = chi(1 + t, self.eff_ub, self.chi_type)
-        # chi_t = torch.nn.functional.interpolate()
-        
+        chi_t = chi(1 + t, self.eff_ub, self.chi_type)[:,None]
+       
         cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
         eta = self.eta_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
         
         yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device)
         beta0 = self.beta_func(yq_tensor)
-        # beta(S+A+Y) * h(t)
         beta = chi_t * beta0
         
         ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
@@ -1664,45 +1662,34 @@ class MLPComponentsCV(nn.Module):
         new_d = self.mu * y + tau * q
         LHS = ut
         for i in range(self.n_com):
-            # d1 = Gradient(u[:, i], inputs, order=1) <------- We don't need this since we numerically approximated these
-            # ut = d1[:, 0][:, None] <------------ Instead use the LHS matrix of derivatives where the column <-> compartment
             LHS_i = LHS[:,i]
             if i == 0:
                 # dS
-                # RHS = - yita * s * (a + y)  - self.beta * new_d * self.n_contacts * s + self.alpha * tq
                 RHS = - yita * s  * (a + y) - beta * new_d * self.n_contacts * s + self.alpha * tq
             elif i == 1:
                 # dT
-                # RHS = self.beta * new_d * self.n_contacts * s  - self.alpha * tq
                 RHS = beta * new_d * self.n_contacts * s - self.alpha * tq
             elif i == 2:
                 # dE
-                # RHS = yita * s  * (a + y) - self.gamma * e
                 RHS = yita * s * (a + y) - self.gamma * e
             elif i == 3:
                 # dA
-                # RHS = self.p_asymp * self.gamma * e - self.lamda * a - self.beta * new_d * self.n_contacts * a
                 RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
             elif i == 4:
                 # dY
-                # RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - self.beta * new_d * self.n_contacts * y
                 RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - beta * new_d * self.n_contacts * y
             elif i == 5:
                 # dD
-                # RHS = new_d - self.lamda * d - self.delta * d
                 RHS = self.mu * y + tau * q - self.lamda * d - self.delta * d
             elif i == 6:
                 # dQ
-                # RHS = self.beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda) * q - self.delta * q
                 RHS = beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda + self.delta) * q
             elif i == 7:
                 # dR
                 RHS = self.lamda * (a + y + d + q)
-                # self.drdt_loss = self.drdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
             elif i == 8:
                 # dF
                 RHS = self.delta * (y + d + q)
-                # self.dfdt_loss = self.dfdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
 
             if i in [0, 1, 2, 3, 4, 5, 6]:
                 pde_loss += (LHS_i - RHS) ** 2
@@ -1735,7 +1722,7 @@ class MLPComponentsCV(nn.Module):
         """ pde loss for the case of removing compartment D"""
         pde_loss = 0
         # unpack inputs input (N,1) shape
-        t = inputs[:, 0][:, None] / self.t_max_real
+        t = inputs[:, 0][:, None] # / self.t_max_real
 
         # partial derivative computations
         u = outputs[:,:,0].clone()
@@ -1783,7 +1770,6 @@ class MLPComponentsCV(nn.Module):
 
         pde_loss *= self.pde_loss_weight
 
-
         if return_mean:
             return torch.mean(pde_loss)
         else:
@@ -1797,7 +1783,8 @@ class MLPComponentsCV(nn.Module):
         inputs = self.inputs
 
         # randomly sample from input domain
-        t = torch.randint(1, self.t_max_real, (self.t_max_real, 1), requires_grad=False)
+        t = torch.randint(1, self.t_max_real, (self.t_max_real, 1), requires_grad=False).flatten()
+        
         u = self.u[t-1]
         ut = self.ut[t-1]
         # t = t * (self.t_max - self.t_min) + self.t_min
@@ -1805,7 +1792,7 @@ class MLPComponentsCV(nn.Module):
         # inputs_rand = torch.cat([x, t], dim=1).float().to(inputs.device)
 
         # get predicted surface fit at sampled points
-        outputs_rand = torch.cat(u[:,:,None], ut[:,:,None], axis=2)
+        outputs_rand = torch.cat([u[:,:,None], ut[:,:,None]], axis=2)
         
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
@@ -1815,4 +1802,4 @@ class MLPComponentsCV(nn.Module):
                 self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
 
         return self.pde_loss_val
-#--------------------------------Original COVASIM_BINN by Xin Li--------------------------------#
+#--------------------------------no main_MLP 3.0--------------------------------#
