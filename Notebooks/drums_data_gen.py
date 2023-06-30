@@ -40,31 +40,54 @@ class ModelParams():
         return
     
 class masking(cv.Intervention):
-  def __init__(self, model_params=None, thresh_scale=None, rel_sus=None, *args, **kwargs):
+  def __init__(self, model_params=None, thresh_scale=None, rel_sus=None, maskprob_ub=None,maskprob_lb=None,*args, **kwargs):
     super().__init__(**kwargs)
     self.population    = model_params.population
     self.thresh_scale  = thresh_scale
     self.rel_sus       = rel_sus
+    self.maskprob_lb   = maskprob_lb
+    self.maskprob_ub   = maskprob_ub
     return
 
   def initialize(self, sim):
     super().initialize()
-    self.population    = int(len(sim.people))
-    self.thresh        = self.population * self.thresh_scale
-    self.tvec          = sim.tvec
+    self.population      = int(len(sim.people))
+    self.thresh          = self.population * self.thresh_scale
+    self.su_orig_rel_sus = np.float32(1.47)
+    self.s_orig_rel_sus  = np.float32(1.24)
+    self.a_orig_rel_sus  = np.float32(1.00)
+    self.ad_orig_rel_sus = np.float32(0.67)
+    self.c_orig_rel_sus  = np.float32(0.34)
+    self.child           = sim.people.age < 9
+    self.adolescent      = np.logical_and(sim.people.age > 0, sim.peopple.age <= 19)
+    self.adult           = np.logical_and(sim.people.age > 19, sim.people.age <= 69)
+    self.senior          = np.logical_and(sim.people.age > 69, sim.people.age <= 79)
+    self.supsenior       = sim.people.age > 79
+    self.tvec            = sim.tvec
 
   def apply(self, sim):
     self.num_dead      = sim.people.dead.sum()
     self.num_diagnosed = sim.people.diagnosed.sum()
     self.p             = np.exp((0.001+((self.num_diagnosed+self.num_dead))/(self.population/10)-0.005*(sim.t)))
     self.p             = (self.p/(1+self.p))-0.35
+    self.p             = np.clip(self.p,self.maskprob_lb,self.maskprob_ub)
     self.immunocomp    = np.random.choice([True,False],size=len(sim.people),p=[0.03,0.97])
-    self.masking       = np.random.choice([True,False],size=len(sim.people),p=[self.p,(1-self.p)])
+    sim.people.rel_sus[self.child]      = self.c_orig_rel_sus
+    sim.people.rel_sus[self.adolescent] = self.ad_orig_rel_sus
+    sim.people.rel_sus[self.adult]      = self.a_orig_rel_sus
+    sim.people.rel_sus[self.senior]     = self.s_orig_rel_sus
+    sim.people.rel_sus[self.supsenior]  = self.su_orig_rel_sus
     if self.num_dead + self.num_diagnosed > self.thresh:
-        sim.people.rel_sus = np.where(True, self.masking,self.rel_sus*sim.people.rel_sus)
-        sim.people.rel_sus = np.where(True, self.immunocomp,self.rel_sus*sim.people.rel_sus)   
+      self.masking       = np.random.choice([True,False],size=len(sim.people),p=[self.p,(1-self.p)])
+      sim.people.rel_sus = np.where(self.masking & self.supsenior,(self.rel_sus * self.su_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.su_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.senior,(self.rel_sus * self.s_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.s_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.adult,(self.rel_sus * self.a_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.a_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.adolescent,(self.rel_sus *self.ad_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.ad_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.child,(self.rel_sus*self.c_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.c_orig_rel_sus )
+      sim.people.rel_sus = np.where(self.immunocomp,(self.rel_sus * sim.people.rel_sus).astype(sim.people.rel_sus.dtype),sim.people.rel_sus)
     else:
-       None
+        None
+
     return
 
 
@@ -225,7 +248,7 @@ def drums_data_generator(model_params=None):
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
-    mk = masking(model_params, thresh_scale=0.0, rel_sus=0.0)
+    mk = masking(model_params, thresh_scale=0.0, rel_sus=0.0,maskprob_lb=0.0,maskprob_ub=0.7)
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)

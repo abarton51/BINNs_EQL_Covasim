@@ -323,6 +323,7 @@ class ModelWrapper():
                 
                 self.model.eval()
                 y_pred = self.model(x)
+                
                 # save plot
                 if epoch % 200 == 0:
                     self.plot(x, y, y_pred, epoch, False)
