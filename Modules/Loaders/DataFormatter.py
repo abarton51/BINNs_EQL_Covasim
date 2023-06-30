@@ -104,7 +104,7 @@ def load_covasim_data(file_path, population, test_prob, trace_prob, keep_d, case
         plt.close()
     return params
 
-def load_covasim_data_drums(file_path, population, keep_d, case_name, plot=True):
+def load_covasim_data_drums(file_path, population, case_name, keep_d=True, plot=True):
     '''
     Load covasim simulation data from .joblib file into dictionary/
     
@@ -120,6 +120,7 @@ def load_covasim_data_drums(file_path, population, keep_d, case_name, plot=True)
     '''
 
     file_name = 'covasim_' + str(case_name)
+
     params = joblib.load(file_path + file_name + '.joblib')
 
     if plot and isinstance(params['data'], pd.DataFrame):   #if plot is true and the data is a pd dataframe
@@ -154,32 +155,41 @@ def load_covasim_data_drums(file_path, population, keep_d, case_name, plot=True)
         list_statesdata = []    #the list we are going to turn into a dataframe
         list_statesdata.append(days)    #making the days the first item (column)
 
-        for element in range(len(data.columns)):  #going through the columns day by day and averaging
+        for element in range(len(data[0].columns)):  #going through the columns day by day and averaging
             stateelements = []  #column for a state
-            for day in range(t):
+            for day in range(len(days)):
                 
                 for df in data:
                     templist = []
-                    templist.append(df.iloc[day,element])
+                    templist.append(df.iloc[day-1,element])
                 avg = int(sum(templist)/len(templist))
                 stateelements.append(avg)
 
 
-        list_statesdata.append(stateelements)
-        avg_df = pd.DataFrame(data =list_statesdata, columns = ["S", "T", "E", "A", "Y", "D", "Q", "R", "F"])
+            list_statesdata.append(stateelements)
+
+        avg_df = pd.DataFrame(zip(*list_statesdata))
+        avg_df = avg_df.iloc[1:]
+        avg_df = avg_df.set_axis(['days', 'S', 'T', 'E', 'A', 'Y', 'D', 'Q', 'R', 'F'], axis=1)
+        
+
+        print(avg_df.head())
 
          # plot compartments  AVERAGE OF MULTIPLE SIMULATIONS   
+
+         #WIP I'm still working on making it look pretty :)
         m = avg_df.shape[1] #num rows in dataframe
         fig = plt.figure(figsize=(10, 7))
-        for i in range(1, m + 1):    #range from 1 to the number of rows plus 1
+        for i in range(1, m ):    #range from 1 to the number of rows
             ax = fig.add_subplot(int(np.ceil(m / 3)), 3, i) #subplot with n divided by 3 and rounded up num rows, 3 num cols and the element goes in the ith place
-            ax.plot(avg_df.iloc[:,0], avg_df.iloc[:, i])
-            ax.legend()
+            ax.plot(avg_df['days'], avg_df.iloc[:,i])
+            #ax.legend()
             fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         plt.tight_layout(pad=2)
-        plt.savefig(file_path + file_name + '.png')
-        plt.close()
+        #plt.savefig(file_path + file_name + '.png')
         
+        plt.show()
+        #plt.close()
         
         
         
