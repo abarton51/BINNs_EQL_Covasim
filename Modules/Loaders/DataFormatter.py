@@ -150,50 +150,27 @@ def load_covasim_data_drums(file_path, population, case_name, keep_d=True, plot=
        
        ##For averaging the simulations and plotting the average
 
-       #creating the dataframe with averages instead of a list of dataframes for mutliple simulations
-        days = list(range(0,data[0].shape[0] + 1)) #list of numbers to represent days
-        list_statesdata = []    #the list we are going to turn into a dataframe
-        list_statesdata.append(days)    #making the days the first item (column)
+        matrix_list = [df.values for df in data]    #turning dataframes into matricies
+        matrix3d = np.array(matrix_list)    #turning list of matricies into 3d matrix
+        mean_mat = np.mean(matrix3d, axis = 0)  #averaging each of the days for each state
+        max_mat = np.max(matrix3d, axis = 0)    #getting the max of each of the days for each state
+        min_mat = np.min(matrix3d, axis = 0)    #getting the min of each of the days for each state
 
-        for element in range(len(data[0].columns)):  #going through the columns day by day and averaging
-            stateelements = []  #column for a state
-            for day in range(len(days)):
-                
-                for df in data:
-                    templist = []
-                    templist.append(df.iloc[day-1,element])
-                avg = int(sum(templist)/len(templist))
-                stateelements.append(avg)
-
-
-            list_statesdata.append(stateelements)
-
-        avg_df = pd.DataFrame(zip(*list_statesdata))
-        avg_df = avg_df.iloc[1:]
-        avg_df = avg_df.set_axis(['days', 'S', 'T', 'E', 'A', 'Y', 'D', 'Q', 'R', 'F'], axis=1)
-        
-
-        print(avg_df.head())
-
-         # plot compartments  AVERAGE OF MULTIPLE SIMULATIONS   
-
-         #WIP I'm still working on making it look pretty :)
-        m = avg_df.shape[1] #num rows in dataframe
+        num_days= mean_mat.shape[0] #num rows in matrix
+        days = range(num_days)  
+        num_cols = mean_mat.shape[1]
+        col_name = ["S", "T", "E", "A", "Y", "D", "Q", "R", "F"]    #names for the columns
         fig = plt.figure(figsize=(10, 7))
-        for i in range(1, m ):    #range from 1 to the number of rows
-            ax = fig.add_subplot(int(np.ceil(m / 3)), 3, i) #subplot with n divided by 3 and rounded up num rows, 3 num cols and the element goes in the ith place
-            ax.plot(avg_df['days'], avg_df.iloc[:,i])
-            #ax.legend()
+        for i in range(num_cols):    #iterating through each state and plotting them vs days in separate plots
+            ax = fig.add_subplot(3, 3, i+1) #subplot with n divided by 3 and rounded up num rows, 3 num cols and the element goes in the ith place
+            ax.plot(days, mean_mat[:,i])    #this is for the average line
+            ax.fill_between(days, max_mat[:,i], min_mat[:,i], alpha=0.2, label='Error') #this is for the error cloud
+            ax.set_title(col_name[i])   #this is to name each plot for their specific state
             fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         plt.tight_layout(pad=2)
         #plt.savefig(file_path + file_name + '.png')
-        
-        plt.show()
         #plt.close()
-        
-        
-        
-        
+        plt.show()
         
         '''
         # plot compartments EACH SIMULATION ON TOP OF EACH OHTER
