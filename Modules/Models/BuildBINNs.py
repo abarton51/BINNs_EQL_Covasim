@@ -1131,4 +1131,4 @@ class MLPComponentsCV(nn.Module):
                 self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
 
         return self.pde_loss_val
-#--------------------------------no main_MLP 3.0--------------------------------#
+#--------------------------------no main_MLP-----------------------------------#
