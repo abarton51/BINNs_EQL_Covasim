@@ -24,7 +24,8 @@ class ModelParams():
                  trace_ub=0.3, 
                  chi_type='constant', 
                  keep_d=True, 
-                 dynamic=True):
+                 dynamic=True,
+                 maskb=False):
         
         global chi_type_global
         global eff_ub_global
@@ -36,7 +37,58 @@ class ModelParams():
         self.trace_lb = trace_lb
         self.keep_d = keep_d
         self.dynamic = dynamic
+        self.maskb = maskb
         return
+
+class masking(cv.Intervention):
+  def __init__(self, model_params=None, thresh_scale=None, rel_sus=None, maskprob_ub=None,maskprob_lb=None,*args, **kwargs):
+    super().__init__(**kwargs)
+    self.population    = model_params.population
+    self.thresh_scale  = thresh_scale
+    self.rel_sus       = rel_sus
+    self.maskprob_lb   = maskprob_lb
+    self.maskprob_ub   = maskprob_ub
+    return
+
+  def initialize(self, sim):
+    super().initialize()
+    self.population      = int(len(sim.people))
+    self.thresh          = self.population * self.thresh_scale
+    self.su_orig_rel_sus = np.float32(1.47)
+    self.s_orig_rel_sus  = np.float32(1.24)
+    self.a_orig_rel_sus  = np.float32(1.00)
+    self.ad_orig_rel_sus = np.float32(0.67)
+    self.c_orig_rel_sus  = np.float32(0.34)
+    self.child           = sim.people.age < 9
+    self.adolescent      = np.logical_and(sim.people.age > 0, sim.people.age <= 19)
+    self.adult           = np.logical_and(sim.people.age > 19, sim.people.age <= 69)
+    self.senior          = np.logical_and(sim.people.age > 69, sim.people.age <= 79)
+    self.supsenior       = sim.people.age > 79
+    self.tvec            = sim.tvec
+
+  def apply(self, sim):
+    self.num_dead      = sim.people.dead.sum()
+    self.num_diagnosed = sim.people.diagnosed.sum()
+    self.p             = np.exp((0.001+((self.num_diagnosed+self.num_dead))/(self.population/10)-0.005*(sim.t)))
+    self.p             = (self.p/(1+self.p))-0.35
+    self.p             = np.clip(self.p,self.maskprob_lb,self.maskprob_ub)
+    self.immunocomp    = np.random.choice([True,False],size=len(sim.people),p=[0.03,0.97])
+    sim.people.rel_sus[self.child]      = self.c_orig_rel_sus
+    sim.people.rel_sus[self.adolescent] = self.ad_orig_rel_sus
+    sim.people.rel_sus[self.adult]      = self.a_orig_rel_sus
+    sim.people.rel_sus[self.senior]     = self.s_orig_rel_sus
+    sim.people.rel_sus[self.supsenior]  = self.su_orig_rel_sus
+    if self.num_dead + self.num_diagnosed > self.thresh:
+      self.masking       = np.random.choice([True,False],size=len(sim.people),p=[self.p,(1-self.p)])
+      sim.people.rel_sus = np.where(self.masking & self.supsenior,(self.rel_sus * self.su_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.su_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.senior,(self.rel_sus * self.s_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.s_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.adult,(self.rel_sus * self.a_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.a_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.adolescent,(self.rel_sus *self.ad_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.ad_orig_rel_sus)
+      sim.people.rel_sus = np.where(self.masking & self.child,(self.rel_sus*self.c_orig_rel_sus).astype(sim.people.rel_sus.dtype),self.c_orig_rel_sus )
+      sim.people.rel_sus = np.where(self.immunocomp,(self.rel_sus * sim.people.rel_sus).astype(sim.people.rel_sus.dtype),sim.people.rel_sus)
+    else:
+        None
+    return
 
 class store_compartments(cv.Analyzer):
 
@@ -87,17 +139,9 @@ class store_compartments(cv.Analyzer):
         pl.ylabel('People')
         sc.setylim() # Reset y-axis to start at 0
         sc.commaticks() # Use commas in the y-axis labels
-        # pl.show()
+        # plt.show()
         pl.savefig('../Notebooks/figs/' + 'compartments' + '.png')
         return
-
-def get_dynamic_mask(ftype, n):
-    if ftype == 'logistic':
-        res = np.zeros(len(n))
-        p = res
-    elif ftype == 'beta':
-        p = beta.rvs(1, 99, size=n)
-    return p
 
 def get_dynamic_eff(ftype, eff_ub):
     '''
@@ -164,7 +208,7 @@ def dynamic_tracing(sim):
 
 
 
-def drums_data_generator_multi(model_params=None, num_runs=10):
+def drums_data_generator_multi(model_params=None, num_runs=100):
     '''
     Data generation function that takes in the model parameters for the COVASIM simulation
     and interacts with the covaism module in order to simulate, save, and store data.
@@ -181,8 +225,10 @@ def drums_data_generator_multi(model_params=None, num_runs=10):
         model_params = ModelParams()
     
     n_runs = num_runs
+    population = model_params.population
     keep_d = model_params.keep_d
     dynamic = model_params.dynamic
+    maskb = model_params.maskb
     
     # Define the testing and contact tracing interventions
     test_scale = model_params.test_prob
@@ -191,34 +237,51 @@ def drums_data_generator_multi(model_params=None, num_runs=10):
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
+    mk = masking(model_params, thresh_scale=0.1,rel_sus=1.0, maskprob_lb=0.0, maskprob_ub=0.7)
+
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
-    keep_d = True
-    population = model_params.population
+    
     case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=True)
     case_name = '_'.join([case_name, chi_type_global])
-    # Define the default parameters
-    pars = dict(
-        pop_type      = 'hybrid',
-        pop_size      = population,
-        pop_infected  = population / 500,
-        start_day     = '2020-02-01',
-        end_day       = '2020-08-01',
-        interventions = [tp, ct, dynamic_tracing],
-        analyzers=store_compartments(keep_d, label='get_compartments'),
-        asymp_factor = 0.5
-    )
+    if maskb:
+        # Define the default parameters if there is masking intervention
+        pars = dict(
+            pop_type      = 'hybrid',
+            pop_size      = population,
+            pop_infected  = population / 500,
+            start_day     = '2020-02-01',
+            end_day       = '2020-08-01',
+            interventions = [tp, ct, dynamic_tracing, mk],
+            analyzers=store_compartments(keep_d, label='get_compartments'),
+            asymp_factor = 0.5
+        )
+    else:
+         # Define the default parameters
+        pars = dict(
+            pop_type      = 'hybrid',
+            pop_size      = population,
+            pop_infected  = population / 500,
+            start_day     = '2020-02-01',
+            end_day       = '2020-08-01',
+            interventions = [tp, ct, dynamic_tracing],
+            analyzers=store_compartments(keep_d, label='get_compartments'),
+            asymp_factor = 0.5
+        )
 
     # consider new variant
     have_new_variant = False
 
     # Create, run, and plot the simulation
     fig_name = case_name
+    if masking:
+        fig_name = fig_name + '_masking'
+        
     sim = cv.Sim(pars)
     if have_new_variant:
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
-    # sim.run()
+        
     msim = cv.MultiSim(sim)
     msim.run(n_runs=n_runs, parallel=False, keep_people=True)
     msim.mean()

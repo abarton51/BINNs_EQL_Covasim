@@ -238,8 +238,7 @@ def drums_data_generator(model_params=None):
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
-    # mk = masking(model_params, thresh_scale=0.5, rel_sus=0.5, maskprob_lb=0.0, maskprob_ub=0.7)
-    mk = masking(model_params, thresh_scale=0.1,rel_sus=1.0, maskprob_lb=0.0, maskprob_ub=0.7)
+    mk = masking(model_params, thresh_scale=0.1, rel_sus=1.0, maskprob_lb=0.0, maskprob_ub=0.7)
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
