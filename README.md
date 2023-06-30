@@ -4,7 +4,8 @@ All equation learning and BINNs code has been adapted from [[1.]](https://arxiv.
 
 All code under the folder titled "covasim" is the work of the ***["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim)***.
 
-
+### Introduction
+Biologically-Informed Neural Networks attempt to tackle the *model specification* problem by using multilayer perceptrons as nonlinear functional parameters as surrogate models in order to minmize *a priori* assumptions about the form of the differential equation(s) as well as expand the number of possible solutions to such a model. Physics-Informed Neural Networks, first introduced in [2018](https://www.sciencedirect.com/science/article/abs/pii/S0021999118307125), primarily tackle the issue of inferring a surface of solutions to a system of differential equations. This inherently requires prior knowledge and assumptions of the governing dynamics. One of the most apparent assumptions, which is mentioned in [[3.]](https://www.sciencedirect.com/science/article/abs/pii/S0021999118307125), is the form of each of the parameters in the governing system of equations. Generally, these parameters may be linear, nonlinear, or constant functions. If they are nonlinear, the space of possible functions is too large to accurately solve for using methods of sparse regression. Hence, using a universal function approximator (such as an MLP) allows us to learn these nonlinear components and then infer underlying relationships and functions *a posteriori*.
 
 #### References
 
