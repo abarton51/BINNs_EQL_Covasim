@@ -24,7 +24,7 @@ class ModelParams():
                  chi_type='constant', 
                  keep_d=True, 
                  dynamic=True,
-                 masking=False):
+                 maskb=False):
         
         global chi_type_global
         global eff_ub_global
@@ -36,7 +36,7 @@ class ModelParams():
         self.trace_lb = trace_lb
         self.keep_d = keep_d
         self.dynamic = dynamic
-        self.masking = masking
+        self.maskb = maskb
         return
     
 class masking(cv.Intervention):
@@ -59,7 +59,7 @@ class masking(cv.Intervention):
     self.ad_orig_rel_sus = np.float32(0.67)
     self.c_orig_rel_sus  = np.float32(0.34)
     self.child           = sim.people.age < 9
-    self.adolescent      = np.logical_and(sim.people.age > 0, sim.peopple.age <= 19)
+    self.adolescent      = np.logical_and(sim.people.age > 0, sim.people.age <= 19)
     self.adult           = np.logical_and(sim.people.age > 19, sim.people.age <= 69)
     self.senior          = np.logical_and(sim.people.age > 69, sim.people.age <= 79)
     self.supsenior       = sim.people.age > 79
@@ -87,7 +87,6 @@ class masking(cv.Intervention):
       sim.people.rel_sus = np.where(self.immunocomp,(self.rel_sus * sim.people.rel_sus).astype(sim.people.rel_sus.dtype),sim.people.rel_sus)
     else:
         None
-
     return
 
 
@@ -147,14 +146,6 @@ class store_compartments(cv.Analyzer):
             plot_name = 'compartments'
         pl.savefig('../Notebooks/figs/drums/' + plot_name + '.png')
         return
-    
-def get_dynamic_mask(ftype, n):
-    if ftype == 'logistic':
-        res = np.zeros(len(n))
-        p = res
-    elif ftype == 'beta':
-        p = beta.rvs(1, 99, size=n)
-    return p
 
 def get_dynamic_eff(ftype, eff_ub):
     '''
@@ -219,8 +210,7 @@ def dynamic_tracing(sim):
     cur_scale = eff[cur_t]
     trace_prob = {key: val * cur_scale for key, val in trace_prob.items()}
     cur_inter.trace_probs = trace_prob
-
-
+    
 
 def drums_data_generator(model_params=None):
     '''
@@ -240,7 +230,7 @@ def drums_data_generator(model_params=None):
     population = model_params.population
     keep_d = model_params.keep_d
     dynamic = model_params.dynamic
-    masking = model_params.masking
+    maskb = model_params.maskb
     # Define the testing and contact tracing interventions (hyperparameter)
     test_scale = model_params.test_prob
     # test_quarantine_scale = 0.1   min(test_scale * 4, 1)
@@ -248,7 +238,8 @@ def drums_data_generator(model_params=None):
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
-    mk = masking(model_params, thresh_scale=0.0, rel_sus=0.0,maskprob_lb=0.0,maskprob_ub=0.7)
+    # mk = masking(model_params, thresh_scale=0.5, rel_sus=0.5, maskprob_lb=0.0, maskprob_ub=0.7)
+    mk = masking(model_params, thresh_scale=0.1,rel_sus=1.0, maskprob_lb=0.0, maskprob_ub=0.7)
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
@@ -256,7 +247,7 @@ def drums_data_generator(model_params=None):
     case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=dynamic)
     case_name = '_'.join([case_name, chi_type_global])
     
-    if masking:
+    if maskb:
         # Define the default parameters if there is masking intervention
         pars = dict(
             pop_type      = 'hybrid',
