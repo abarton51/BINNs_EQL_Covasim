@@ -274,8 +274,10 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
 
     # Create, run, and plot the simulation
     fig_name = case_name
-    if masking:
-        fig_name = fig_name + '_masking'
+    if maskb:
+        fig_name = fig_name + '_masking' + '_' + str(n_runs)
+    else:
+        fig_name = fig_name + '_' + str(n_runs)
         
     sim = cv.Sim(pars)
     if have_new_variant:
@@ -337,7 +339,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     params['data'] = data_replicates.copy() #df_final
     params['dynamic_tracing'] = True
     params['eff_ub'] = eff_ub_global
-    file_name = 'covasim_'+ case_name + '_' + str(n_runs)
+    file_name = 'covasim_'+ fig_name
     file_name += '.joblib'
     file_path = '../Data/covasim_data/drums_data'
     joblib.dump(params, os.path.join(file_path, file_name), compress=True)
