@@ -21,7 +21,7 @@ All code under the folder titled "covasim" is the work of the ***["Institute for
 ### Notebooks
 This folder contains all the code for training, evaluating, and plotting learned parameter curves.
 
-#### Modules
+### Modules
 This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc. 
 ##### Models
 - BuildBINNs.py: This file contains the code for the BINNs models. There are 3 separate models. One being the model created by Xin Li and the others being the models adapted by Austin Barton from Xin Li that bypasses the surface fitting portion of BINNs to focus on learning the parameters.
