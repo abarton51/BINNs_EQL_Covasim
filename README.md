@@ -18,14 +18,17 @@ All code under the folder titled "covasim" is the work of the ***["Institute for
 
 ***
 ## Directory
-### Notebooks
-This folder contains all the code for training, evaluating, and plotting learned parameter curves.
+### Data
+This folder contains all the data and compartmental plots from Covasim generated simulated data.
 
 ### Modules
-This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc. 
+This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
+
 ##### Models
 - BuildBINNs.py: This file contains the code for the BINNs models. There are 3 separate models. One being the model created by Xin Li and the others being the models adapted by Austin Barton from Xin Li that bypasses the surface fitting portion of BINNs to focus on learning the parameters.
 - BuildMLP.py: This file interacts with PyTorch to create a basic multi-layer perceptron (MLP).
+### Notebooks
+This folder contains all the code for training, evaluating, and plotting learned parameter curves.
 
 ***
 #### References
