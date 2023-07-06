@@ -18,7 +18,7 @@ All code under the folder titled "covasim" is the work of the ***["Institute for
 
 ***
 ## Directory
-#### Notebooks
+### Notebooks
 This folder contains all the code for training, evaluating, and plotting learned parameter curves.
 
 #### Modules
