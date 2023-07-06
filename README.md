@@ -1,4 +1,4 @@
-<h1 align="center">Incorporating adaptive human behavior into epidemiological models using equation learning</h1>
+<h1 align="center">Incorporating Adaptive Human Behavior into Epidemiological Models Using Equation Learning</h1>
 
 ### Equation Learning for Covasim with added Adaptive Behaviors using Biologically-Informed Neural Networks
 
