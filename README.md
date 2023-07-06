@@ -17,6 +17,17 @@ All code under the folder titled "covasim" is the work of the ***["Institute for
 &emsp; Biologically-Informed Neural Networks attempt to tackle the *model specification* problem by using multilayer perceptrons as surrogate models to approximate unknown and possibly nonlinear parameters in order to minmize *a priori* assumptions about the form of the differential equation(s) as well as expand the number of possible solutions to such a model. Physics-Informed Neural Networks, first introduced in [2018](https://www.sciencedirect.com/science/article/abs/pii/S0021999118307125), primarily tackle the issue of inferring a surface of solutions to a system of differential equations. This inherently requires prior knowledge and assumptions of the governing dynamics. One of the most apparent assumptions, which is directly addressed by [1.] and mentioned in [3.], is the form of each of the parameters in the governing system of equations. Generally, these parameters may be linear, nonlinear, or constant functions. If they are nonlinear, the space of possible functions is too large to accurately solve for without making large assumptions using methods of sparse regression. Hence, using a universal function approximator (such as an MLP) allows us to learn these nonlinear components and then infer underlying relationships and functions *a posteriori*.
 
 ***
+## Directory
+#### Notebooks
+This folder contains all the code for training, evaluating, and plotting learned parameter curves.
+
+#### Modules
+This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc. 
+##### Models
+- BuildBINNs.py: This file contains the code for the BINNs models. There are 3 separate models. One being the model created by Xin Li and the others being the models adapted by Austin Barton from Xin Li that bypasses the surface fitting portion of BINNs to focus on learning the parameters.
+- BuildMLP.py: This file interacts with PyTorch to create a basic multi-layer perceptron (MLP).
+
+***
 #### References
 
 1. Lagergren, J. H., Nardini, J. T., Baker, R. E., Simpson, M. J., & Flores, K. B. (2020). Biologically-informed neural networks guide mechanistic modeling from sparse experimental data. PLOS Computational Biology, 16(12). https://doi.org/10.1371/journal.pcbi.1008462 
