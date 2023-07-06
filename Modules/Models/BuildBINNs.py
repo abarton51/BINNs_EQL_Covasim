@@ -1167,7 +1167,7 @@ class infect_rate_deep_MLP(nn.Module):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=3,
-            layers=[128, 128, 128, 1],
+            layers=[256, 256, 256, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
@@ -1197,7 +1197,7 @@ class beta_deep_MLP(nn.Module):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
-            layers=[128, 128, 128, 1],
+            layers=[256, 256, 256, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
@@ -1227,7 +1227,7 @@ class tau_deep_MLP(nn.Module):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
-            layers=[128, 128, 128, 1],
+            layers=[256, 256, 256, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
