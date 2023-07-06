@@ -1150,7 +1150,7 @@ class MLPComponentsCV(nn.Module):
 class infect_rate_deep_MLP(nn.Module):
     '''
     Construct MLP surrogate model for the contact rate.
-    Includes one hidden layer with 256 ReLU-activated neurons. Output
+    Includes one hidden layer with 3 layers of 128 ReLU-activated neurons. Output
     is sigmoid-activated to keep predicted rates between 0 and 1.
 
     Inputs:
@@ -1167,7 +1167,7 @@ class infect_rate_deep_MLP(nn.Module):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=3,
-            layers=[128, 3],
+            layers=[128, 128, 128, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
@@ -1197,7 +1197,7 @@ class beta_deep_MLP(nn.Module):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
-            layers=[128, 3],
+            layers=[128, 128, 128, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
@@ -1227,7 +1227,7 @@ class tau_deep_MLP(nn.Module):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
-            layers=[128, 3],
+            layers=[128, 128, 128, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
