@@ -968,7 +968,7 @@ class MLPComponentsCV(nn.Module):
         ut = outputs[:,:,1].clone()
         
         # h(t) values
-        chi_t = chi(1 + t, self.eff_ub, self.chi_type)[:,None]
+        chi_t = chi(16 + t, self.eff_ub, self.chi_type)[:,None]
        
        # cat tensor shape: (num_samples, 3)
         cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
