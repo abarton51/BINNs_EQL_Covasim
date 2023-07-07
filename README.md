@@ -21,6 +21,9 @@ All code under the folder titled "covasim" is the work of the ***["Institute for
 ### Data
 This folder contains all the data and compartmental plots from Covasim generated simulated data.
 
+### models
+This folder contains all the trained models, their outputted compartment, training, evaluation, and learned parameter curves.
+
 ### Modules
 This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
 
