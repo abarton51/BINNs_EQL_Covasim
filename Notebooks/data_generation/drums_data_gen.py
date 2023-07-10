@@ -4,7 +4,7 @@ sys.path.append('../')
 
 import joblib
 import pandas as pd
-from scipy.stats import beta, bernoulli
+from scipy.stats import beta, norm
 
 import covasim.covasim as cv
 import covasim.covasim.utils as cvu
@@ -17,14 +17,14 @@ from utils import get_case_name, import_new_variants
 class ModelParams():
     
     def __init__(self, 
-                 population=int(200e3), 
+                 population=int(50e3), 
                  test_prob=0.1, 
                  trace_lb=0, 
                  trace_ub=0.3, 
                  chi_type='constant', 
                  keep_d=True, 
                  dynamic=True,
-                 maskb=False):
+                 masking=0):
         
         global chi_type_global
         global eff_ub_global
@@ -36,10 +36,10 @@ class ModelParams():
         self.trace_lb = trace_lb
         self.keep_d = keep_d
         self.dynamic = dynamic
-        self.maskb = maskb
+        self.masking = masking
         return
     
-class masking(cv.Intervention):
+class masking_thresh(cv.Intervention):
   def __init__(self, model_params=None, thresh_scale=None, rel_sus=None, maskprob_ub=None,maskprob_lb=None,*args, **kwargs):
     super().__init__(**kwargs)
     self.population    = model_params.population
@@ -89,6 +89,84 @@ class masking(cv.Intervention):
         None
     return
 
+class norm_random_masking(cv.Intervention):
+  def __init__(self,mask_eff=None,maskprob_ub=None,maskprob_lb=None,mean=None,std=None,*args,**kwargs):
+    super().__init__(**kwargs)
+    self.mask_eff    = mask_eff
+    self.maskprob_ub = maskprob_ub
+    self.maskprob_lb = maskprob_lb
+    self.mean        = mean
+    self.std         = std
+    self.t           = []
+    self.num_masking = []
+    return
+
+  def initialize(self,sim):
+    super().initialize()
+    self.pop = len(sim.people)
+    return
+
+  def apply(self,sim):
+    ppl                = sim.people
+    ppl.rel_sus        = ppl.rel_sus
+    self.norm          = norm.rvs(loc=self.mean,scale=self.std,size=self.pop)
+    self.num_dead      = ppl.dead.sum()
+    self.num_diagnosed = (ppl.diagnosed & ppl.infectious).sum()
+    self.x             = self.num_dead + self.num_diagnosed
+    self.p             = np.exp(0.001 + (self.norm*(self.x/self.pop))-0.001*sim.t)
+    self.p             = (self.p/(1+self.p))-0.5
+    self.p             = np.clip(self.p,self.maskprob_lb,self.maskprob_ub)
+    self.masking       = np.random.binomial(1,p=self.p,size=self.pop)
+    ppl.rel_sus        = np.where(self.masking,ppl.rel_sus*self.mask_eff,ppl.rel_sus)
+    self.num_masking.append(np.sum(self.masking))
+    self.t.append(sim.t)
+    return
+
+  def plot(self):
+    plt.plot(self.t,self.num_masking)
+    plt.xlabel('Day')
+    plt.ylabel('# of Agents Masking')
+    plt.title('# of Agents Masking Over Time')
+    plt.show()
+    return
+
+class uniform_masking(cv.Intervention):
+  def __init__(self,mask_eff=None,maskprob_ub=None,maskprob_lb=None,*args,**kwargs):
+    super().__init__(**kwargs)
+    self.mask_eff    = mask_eff
+    self.maskprob_ub = maskprob_ub
+    self.maskprob_lb = maskprob_lb
+    self.num_masking    = []
+    self.t              = []
+    return
+
+  def initialize(self,sim):
+    super().initialize() 
+    self.pop = len(sim.people)
+    return
+  
+  def apply(self,sim):
+    ppl                = sim.people
+    ppl.rel_sus        = ppl.rel_sus
+    self.t.append(sim.t) 
+    self.num_dead      = ppl.dead.sum()
+    self.num_diagnosed = (ppl.diagnosed & ppl.infectious).sum()
+    self.x             = self.num_dead + self.num_diagnosed
+    self.p             = np.exp(0.001 + 100*(self.x/self.pop)-0.001*sim.t)
+    self.p             = (self.p/(1+self.p))-0.5 
+    self.p             = np.clip(self.p,self.maskprob_lb,self.maskprob_ub)
+    self.masking       = np.random.binomial(1,p=self.p,size=self.pop)
+    self.num_masking.append(np.sum(self.masking))
+    ppl.rel_sus        = np.where(self.masking,ppl.rel_sus*self.mask_eff,ppl.rel_sus)
+
+  def plot(self):
+    
+    plt.plot(self.t,self.num_masking)
+    plt.xlabel('Day')
+    plt.ylabel('# of Agents Masking')
+    plt.title('Masking Over Time')
+    plt.show()
+    return
 
 class store_compartments(cv.Analyzer):
 
@@ -230,7 +308,7 @@ def drums_data_generator(model_params=None):
     population = model_params.population
     keep_d = model_params.keep_d
     dynamic = model_params.dynamic
-    maskb = model_params.maskb
+    masking = model_params.masking
     # Define the testing and contact tracing interventions (hyperparameter)
     test_scale = model_params.test_prob
     # test_quarantine_scale = 0.1   min(test_scale * 4, 1)
@@ -238,7 +316,13 @@ def drums_data_generator(model_params=None):
                       asymp_quar_prob=0.3, quar_policy='daily')
     trace_prob = dict(h=1.0, s=0.5, w=0.5, c=0.3)
 
-    mk = masking(model_params, thresh_scale=0.1, rel_sus=1.0, maskprob_lb=0.0, maskprob_ub=0.7)
+    if not masking==0:
+        if masking==1:
+            mk = masking_thresh(model_params,thresh_scale=0.1,rel_sus=1.0,maskprob_lb=0.0,maskprob_ub=0.7)
+        elif masking==2:
+            mk = uniform_masking(model_params,mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00)
+        elif masking==3:
+            mk = norm_random_masking(model_params,mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00,mean=75,std=50)
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
@@ -246,7 +330,19 @@ def drums_data_generator(model_params=None):
     case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=dynamic)
     case_name = '_'.join([case_name, chi_type_global])
     
-    if maskb:
+    if masking==0:
+        # Define the default parameters (no masking)
+        pars = dict(
+            pop_type      = 'hybrid',
+            pop_size      = population,
+            pop_infected  = population / 500,
+            start_day     = '2020-02-01',
+            end_day       = '2020-08-01',
+            interventions = [tp, ct, dynamic_tracing],
+            analyzers=store_compartments(keep_d, label='get_compartments'),
+            asymp_factor = 0.5
+        )
+    else:
         # Define the default parameters if there is masking intervention
         pars = dict(
             pop_type      = 'hybrid',
@@ -258,26 +354,19 @@ def drums_data_generator(model_params=None):
             analyzers=store_compartments(keep_d, label='get_compartments'),
             asymp_factor = 0.5
         )
-    else:
-         # Define the default parameters
-        pars = dict(
-            pop_type      = 'hybrid',
-            pop_size      = population,
-            pop_infected  = population / 500,
-            start_day     = '2020-02-01',
-            end_day       = '2020-08-01',
-            interventions = [tp, ct, dynamic_tracing],
-            analyzers=store_compartments(keep_d, label='get_compartments'),
-            asymp_factor = 0.5
-        )
 
     # consider new variant
     have_new_variant = False
 
     # Create, run, and plot the simulation
     fig_name = case_name
-    if masking:
-        fig_name = fig_name + '_masking'
+    if not masking==0:
+        if masking==1:
+            fig_name = fig_name + '_maskingthresh'
+        elif masking==2:
+            fig_name = fig_name + '_maskinguni'
+        elif masking==3:
+            fig_name = fig_name + '_maskingnorm'
         
     sim = cv.Sim(pars)
     if have_new_variant:

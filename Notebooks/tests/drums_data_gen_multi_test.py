@@ -302,13 +302,13 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     # if no model_params is specified then instantiate ModelParams with default parameter values
     if model_params==None:
         model_params = ModelParams()
-    
+
     n_runs = num_runs
     population = model_params.population
     keep_d = model_params.keep_d
     # dynamic = model_params.dynamic
     masking = model_params.masking
-    
+
     # Define the testing and contact tracing interventions
     test_scale = model_params.test_prob
     # test_quarantine_scale = 0.1   min(test_scale * 4, 1)
@@ -326,7 +326,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
-    
+
     case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=True)
     case_name = '_'.join([case_name, chi_type_global])
     if masking==0:
@@ -367,12 +367,12 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         fig_name = fig_name + '_maskinguni_' + str(n_runs)
     elif masking==3:
         fig_name = fig_name + '_maskingnorm_' + str(n_runs)
-        
+
     sim = cv.Sim(pars)
     if have_new_variant:
         variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
-        
+
     msim = cv.MultiSim(sim)
     msim.run(n_runs=n_runs, parallel=False, keep_people=True)
     msim.mean()
@@ -428,6 +428,9 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     params['data'] = data_replicates.copy() #df_final
     params['dynamic_tracing'] = True
     params['eff_ub'] = eff_ub_global
+    masking_avg = None
+    params['masking_avg'] = None
+    print(mk.num_masking)
     file_name = 'covasim_'+ fig_name
     file_name += '.joblib'
     file_path = '../../Data/covasim_data/drums_data/tests'
