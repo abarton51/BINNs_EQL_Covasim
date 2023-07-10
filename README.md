@@ -19,10 +19,10 @@ All code under the folder titled "covasim" is the work of the ***["Institute for
 ***
 ## Directory
 ### Data
-This folder contains all the data and compartmental plots from Covasim generated simulated data.
+This folder contains all the data and compartmental plots from Covasim generated data.
 
 ### models
-This folder contains all the trained models, their outputted compartment, training, evaluation, and learned parameter curves.
+This folder contains all the trained models, their outputted compartments, loss, evaluation, and learned parameter curves.
 
 ### Modules
 This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
@@ -32,6 +32,9 @@ This folder acts as a library containing all the models, model wrappers, helper 
 - BuildMLP.py: This file interacts with PyTorch to create a basic multi-layer perceptron (MLP).
 ### Notebooks
 This folder contains all the code for training, evaluating, and plotting learned parameter curves.
+
+##### figs
+This folder contains figures and plots relating to the data.
 
 ***
 #### References
