@@ -137,7 +137,7 @@ def STEAYDQRF_RHS(t, y, contact_rate, quarantine_test, params, t_max):
     y (float): 
     contact_rate (func): the contact rate learned MLP in the BINN model.
     quarantine_test (func): the quarantining rate learned MLP in the BINN model.
-    params (dict):
+    params (dict): parameters of the Covasim model.
     t_max (float): the maximum value of time in the t array.
     '''
 
@@ -361,6 +361,8 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
 
     return y
 
+def sensitivities(y, h):
+    return y / h
 
 def STEAYQRF_RHS(t, y, contact_rate, quarantine_test, params, t_max):
 
