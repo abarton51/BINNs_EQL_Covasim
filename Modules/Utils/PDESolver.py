@@ -21,6 +21,8 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
+h = 1e-16
+
 def D_u(D,dx):
     
     '''
@@ -219,7 +221,7 @@ def chi_func(t, chi_type):
         factor = eff_ub
     return factor
 
-def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type):
+def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type, analyze_beta = False, analyze_eta = False, analyze_tau = False):
     '''
     RHS evaluation of learned components for the STEAYDQRF model.
     
@@ -257,16 +259,30 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
     array = y[None, :][:, [0, 3, 4]].reshape(1,-1) # , chi
     cr = contact_rate(array).reshape(-1)
     yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
+
+    if analyze_eta == True:
+        yita += complex(0,h)
+
+
+
     yq_array = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
     # yq_array = y[None, :][:, [4, 6]].reshape(1,-1)
     beta0 = quarantine_test(yq_array).reshape(-1)
     # beta = params['beta_lb'] + (params['beta_ub'] - params['beta_lb']) * beta0
     beta = chi * beta0
+
+    if analyze_beta == True:
+        beta += complex(0,h)
     # print(beta)
 
     ay_array = y[None, :][:, [3, 4]].reshape(1,-1)
     tau0 = tau_func(ay_array)
     tau = params['tau_lb'] + (params['tau_ub'] - params['tau_lb']) * tau0
+
+    if analyze_tau == True:
+        tau += complex(0,h)
+
+
     # current compartment values
     s, tq, e, a, y, d, q, r, f = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7], y[8]
     new_d = mu * y +  tau * q
@@ -302,7 +318,7 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
     return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
 
 
-def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type):
+def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type, analyze_beta = False, analyze_eta = False, analyze_tau = False):
     '''
     Simulator for the STEAYDQRF model using numerical integration.
     
@@ -337,7 +353,7 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
 
     # make RHS a function of t,y
     def RHS_ty(t, y):
-        return RHS(t, y, contact_rate, quarantine_test, tau, params, t_max, chi_type)
+        return RHS(t, y, contact_rate, quarantine_test, tau, params, t_max, chi_type, analyze_beta, analyze_eta, analyze_tau)
 
     # initialize array for solution
     y = np.zeros((len(t), len(IC)))
@@ -358,6 +374,11 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
         if not r.successful():
             print("integration failed")
             return 1e6 * np.ones(y.shape)
+        
+    
+    if np.iscomplex(y).any():
+        y = np.imag(y)/h
+
 
     return y
 
