@@ -25,7 +25,10 @@ class ModelParams():
                  chi_type='constant', 
                  keep_d=True, 
                  dynamic=True,
-                 masking=0):
+                 masking=0,
+                 parallel=False,
+                 batches=0,
+                 batch_size=0):
         
         global chi_type_global
         global eff_ub_global
@@ -38,6 +41,9 @@ class ModelParams():
         self.keep_d = keep_d
         self.dynamic = dynamic
         self.masking = masking
+        self.parallel = parallel
+        self.batches = batches
+        self.batch_size = batch_size
         return
 
 class masking_thresh(cv.Intervention):
@@ -294,7 +300,8 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     
     Args:
         model_params (Object): ModelParams object that stores covasim model parameters.
-        n_runs (int): number of simulations to complete to computer sample means of results.
+        num_runs (int): number of simulations to complete to computer sample means of results.
+                        Note: n_runs is not the same as num_runs. n_runs is for naming purposes.
     
     Returns:
         None
@@ -303,10 +310,13 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     if model_params==None:
         model_params = ModelParams()
 
-    n_runs = num_runs
+    if model_params.batches>0:
+        n_runs = model_params.batches * model_params.batch_size
+    else:
+        n_runs = num_runs
+
     population = model_params.population
     keep_d = model_params.keep_d
-    # dynamic = model_params.dynamic
     masking = model_params.masking
 
     # Define the testing and contact tracing interventions
@@ -327,7 +337,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
 
-    case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=True)
+    case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=model_params.dynamic)
     case_name = '_'.join([case_name, chi_type_global])
     if masking==0:
         # Define the default parameters (no masking)
@@ -374,7 +384,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
 
     msim = cv.MultiSim(sim)
-    msim.run(n_runs=n_runs, parallel=False, keep_people=True)
+    msim.run(n_runs=num_runs, parallel=model_params.parallel, keep_people=True)
     msim.mean()
     msim.plot(to_plot=['new_infections_by_variant','new_infections', 'new_tests', 'new_diagnoses', 'cum_diagnoses', 'new_quarantined', 'test_yield'],
              do_show=False)
@@ -428,9 +438,6 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     params['data'] = data_replicates.copy() #df_final
     params['dynamic_tracing'] = True
     params['eff_ub'] = eff_ub_global
-    masking_avg = None
-    params['masking_avg'] = None
-    print(mk.num_masking)
     file_name = 'covasim_'+ fig_name
     file_name += '.joblib'
     file_path = '../../Data/covasim_data/drums_data'
