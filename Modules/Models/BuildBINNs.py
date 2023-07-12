@@ -472,10 +472,10 @@ class BINNCovasim(nn.Module):
     
 #--------------------------------Original COVASIM_BINN by Xin Li--------------------------------#
 #-----------------------------------------------------------------------------------------------#
-#--------------------------------mu_MLP DEMO----------------------------------------------------#
-class mu_MLP(nn.Module):
+#--------------------------------Masking Average added as input---------------------------------#
+class eta_mask_MLP(nn.Module):
     '''
-    Construct MLP surrogate model for the diagnoses rate of symptomatic individuals.
+    Construct MLP surrogate model for the contact rate with adaptive masking.
     Includes one hidden layer with 256 ReLU-activated neurons. Output
     is sigmoid-activated to keep predicted rates between 0 and 1.
 
@@ -483,32 +483,32 @@ class mu_MLP(nn.Module):
         N/A
 
     Args:
-        inputs (torch tensor): Y, F with shape (N, 2)
+        inputs (torch tensor): S, A, Y with shape (N, 3)
 
     Returns:
-        outputs (torch tensor): predicted diagnoses rates of symptomatic, mu(Y, F), values with shape (N, 1)
+        outputs (torch tensor): predicted contact rate, eta(S, A, Y), values with shape (N, 1)
     '''
 
     def __init__(self):
         super().__init__()
         self.mlp = BuildMLP(
-            input_features=2,
+            input_features=4,
             layers=[256, 1],
             activation=nn.ReLU(),
             linear_output=False,
-            output_activation=nn.Sigmoid())
+            output_activation=nn.Sigmoid())  #  SoftplusReLU()
 
     def forward(self, inputs):
         outputs = self.mlp(inputs)
 
         return outputs
 
-class BINNCovasim_DRUMS(nn.Module):
+class AdaMaskBINNCovasim(nn.Module):
     '''
     Constructs a biologically-informed neural network (BINN) composed of
     average number of contacts sufficient to transmit infection per unit of time (eta),
-    the effective tracing rate (beta), the rate of diagnoses from people in 
-    quarantine (tau), and the rate of diagnoses from people who are symptomatic (mu).
+    the effective tracing rate (beta), and the rate of diagnoses from people in 
+    quarantine (tau).
 
     Args:
         params (dict): dictionary of parameters from COVASIM model.
@@ -528,21 +528,18 @@ class BINNCovasim_DRUMS(nn.Module):
         self.n_com = 9 if keep_d else 8
         # surface fitter
         self.yita_loss = None
-        self.yita_lb = yita_lb if yita_lb is not None else 0.2
-        self.yita_ub = yita_ub if yita_ub is not None else 0.4
+        self.yita_lb = yita_lb if yita_lb is not None else 0.1
+        self.yita_ub = yita_ub if yita_ub is not None else 0.5
         self.beta_lb = 0.1
         self.beta_ub = 0.3
-        self.tau_lb = 0.1
+        self.tau_lb = 0.1 #   0.01
         self.tau_ub =  0.3 #  params['tau_ub']
-        self.mu_lb = 0.01
-        self.mu_ub = 0.5
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
-        self.eta_func = infect_rate_MLP()
+        self.eta_mask_func = eta_mask_MLP()
         self.beta_func = beta_MLP()
         self.tau_func = tau_MLP()
-        self.mu_func = mu_MLP()
 
         # input extrema
         self.t_min = 0.0
@@ -550,22 +547,18 @@ class BINNCovasim_DRUMS(nn.Module):
         self.t_max_real = t_max_real # what is max(t) in the real unaltered timescale
 
         # loss weights
-        # initial condition loss weight
         self.IC_weight = 1e1
-        # surface loss weight (solution of system of ODEs)
         self.surface_weight = 1e2
-        # pde loss weight
         self.pde_weight = 1e4  # 1e4
         
         if keep_d:
-            self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float) # [1, 1, 1, 1000, 1, 1, 1000, 1, 1000]
+            self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
         else:
             self.weights_c = torch.tensor(np.array([1, 1, 1, 1, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
         
         self.pde_loss_weight = 1e0
         self.eta_loss_weight = 1e5
         self.tau_loss_weight = 1e5
-        self.mu_loss_weight = 1e3
 
         # proportionality constant
         self.gamma = 0.2
@@ -573,7 +566,6 @@ class BINNCovasim_DRUMS(nn.Module):
         # number of samples for pde loss
         self.num_samples = 1000
 
-        # name of BINN model
         self.name = 'covasim_fitter'
 
         self.params = params
@@ -582,6 +574,7 @@ class BINNCovasim_DRUMS(nn.Module):
         self.alpha = params['alpha']
         self.beta = params['beta']
         self.gamma = params['gamma']
+        self.mu = params['mu']
         self.lamda = params['lamda']
         self.p_asymp = params['p_asymp']
         self.n_contacts = params['n_contacts']
@@ -589,16 +582,14 @@ class BINNCovasim_DRUMS(nn.Module):
         self.tracing_array = tracing_array
 
         self.keep_d = keep_d
+
         # if dynamic
         if 'dynamic_tracing' in params:
             self.is_dynamic = True
         self.eff_ub = params['eff_ub']
 
         self.chi_type = chi_type if chi_type is not None else None
-        
-        # we comment out these two since they are assumed unknown
-        # self.mu = params['mu']
-        # self.tau = params['tau'] / 4 if 'tau' in params else None
+
 
     def forward(self, inputs):
 
@@ -620,70 +611,41 @@ class BINNCovasim_DRUMS(nn.Module):
         residual *= pred.abs().clamp(min=1.0) ** (-self.gamma)
 
         # apply weights on compartments
-        residual *= self.weights_c
+        residual *= self.weights_c.to(self.inputs.device)
 
         return torch.mean(residual)
 
     def pde_loss(self, inputs, outputs, return_mean=True):
 
-        #initialize pde_loss
         pde_loss = 0
-        
-        # unpack inputs (time t) as shape (N, 1)
+        # unpack inputs
         t = inputs[:, 0][:, None]
 
         # partial derivative computations
         u = outputs.clone()
         
+        # h(t) values
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
-        
-        '''Contact rate: eta_MLP'''
-        #-----------------------------------------------------------------------#
-        # store inputs of eta, (S, A, Y), into tensor of floats
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
-        # evaluate eta_MLP(S, A, Y)
-        eta = self.eta_func(cat_tensor)
-        # transform eta_MLP(S, A, Y) into the interval [yita_lb, yita_ub]
+    
+        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device) # t,
+        eta = self.eta_mask_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
-        #-----------------------------------------------------------------------#
         
-        '''Tracing rate: beta_MLP'''
-        #-----------------------------------------------------------------------#
-        # store inputs of beta, (S+A+Y), into tensor of floats
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device)
-        # evaluate beta_MLP(S+A+Y) NOTE: We are learning beta(S+A+Y)_MLP, not beta_MLP(S+A+Y, chi(t))
+        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device) # 5, 7, 8
         beta0 = self.beta_func(yq_tensor)
-        # transform beta_MLP(S+A+Y) into the interval [beta_lb, beta_ub]
-        #beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
-        # evaluate beta_MLP(S+A+Y)*chi(t)
+        # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
         beta = chi_t * beta0
-        #-----------------------------------------------------------------------#
         
-        '''Quarantined Diagnosis rate: tau_MLP'''
-        #-----------------------------------------------------------------------#
-        # store inputs of tau, (A, Y), into tensor of floats
-        ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
-        # evaluate tau_MLP(A, Y)
+        ay_tensor = u[:,[3,4]]
         tau0 = self.tau_func(ay_tensor)
-        # transform tau_MLP(A, Y) into the interval [tau_lb, tau_ub]
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
-        #-----------------------------------------------------------------------#
-        
-        '''Symptomatic Diagnosis rate: mu_MLP'''
-        #-----------------------------------------------------------------------#
-        # store inputs of mu, (Y, F), into tensor of floats
-        y_tensor = torch.Tensor(u[:,[4, 8]]).float().to(inputs.device)
-        # evaluate mu_MLP(Y, F)
-        mu0 = self.mu_func(y_tensor)
-        # transform mu_MLP(Y, F) into the interval [mu_lb, mu_ub]
-        mu = self.mu_lb + (self.mu_ub - self.mu_lb) * mu0
-        #-----------------------------------------------------------------------#
         
         # STEAYDQRF model, loop through each compartment
         s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
                                     u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
                                     u[:, 8][:, None]
-        new_d = mu * y + tau * q
+        # (mu * Y + tau * Q)
+        new_d = self.mu * y + tau * q
         for i in range(self.n_com):
             d1 = Gradient(u[:, i], inputs, order=1)
             ut = d1[:, 0][:, None]
@@ -706,12 +668,12 @@ class BINNCovasim_DRUMS(nn.Module):
                 RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
             elif i == 4:
                 # dY
-                # RHS = (1 - self.p_asymp) * self.gamma * e - (mu + self.lamda + self.delta) * y - self.beta * new_d * self.n_contacts * y
-                RHS = (1 - self.p_asymp) * self.gamma * e - (mu + self.lamda + self.delta) * y - beta * new_d * self.n_contacts * y
+                # RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - self.beta * new_d * self.n_contacts * y
+                RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - beta * new_d * self.n_contacts * y
             elif i == 5:
                 # dD
                 # RHS = new_d - self.lamda * d - self.delta * d
-                RHS = mu * y + tau * q - self.lamda * d - self.delta * d
+                RHS = self.mu * y + tau * q - self.lamda * d - self.delta * d
             elif i == 6:
                 # dQ
                 # RHS = self.beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda) * q - self.delta * q
@@ -746,19 +708,11 @@ class BINNCovasim_DRUMS(nn.Module):
 
         self.tau_y_loss = 0
         self.tau_y_loss += self.tau_loss_weight * torch.where(dtau[:,1] < 0, dtau[:,1] ** 2, torch.zeros_like(dtau[:,1]))
-        
-        # constraint on mu function
-        dmu = Gradient(mu, y_tensor, order=1)
-        self.mu_y_loss = 0
-        self.mu_y_loss += self.mu_loss_weight * torch.where(dmu[:,0] < 0, dmu[:,0] ** 2, torch.zeros_like(dmu[:,0]))
-        
-        self.mu_f_loss = 0
-        self.mu_f_loss += self.mu_loss_weight * torch.where(dmu[:,1] < 0, dmu[:,1] ** 2, torch.zeros_like(dmu[:,1]))
 
         if return_mean:
-            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss + self.mu_y_loss + self.mu_f_loss)
+            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss) #
         else:
-            return pde_loss
+            return pde_loss  # + self.D_loss + self.G_loss + self.T_loss
 
     def pde_loss_no_d(self, inputs, outputs, return_mean=True):
         """ pde loss for the case of removing compartment D"""
@@ -801,11 +755,9 @@ class BINNCovasim_DRUMS(nn.Module):
             elif i == 6:
                 # dR
                 RHS = self.lamda * (a + y + q)
-                # self.drdt_loss = self.drdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
             elif i == 7:
                 # dF
                 RHS = self.delta * (y + q)
-                # self.dfdt_loss = self.dfdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
                 
             if i in [0, 1, 2, 3, 4, 5]:
                 pde_loss += (LHS - RHS) ** 2
@@ -814,7 +766,7 @@ class BINNCovasim_DRUMS(nn.Module):
 
 
         if return_mean:
-            return torch.mean(pde_loss)  #  + self.dfdt_loss + self.drdt_loss
+            return torch.mean(pde_loss)
         else:
             return pde_loss
 
@@ -830,14 +782,13 @@ class BINNCovasim_DRUMS(nn.Module):
         t = torch.rand(self.num_samples, 1, requires_grad=True)
         t = t * (self.t_max - self.t_min) + self.t_min
         inputs_rand = t.to(inputs.device)
-        # inputs_rand = torch.cat([x, t], dim=1).float().to(inputs.device)
 
         # predict surface fitter at sampled points
-        outputs_rand = self.surface_fitter(t)
+        outputs_rand = self.surface_fitter(inputs_rand)
 
         # compute surface loss
         self.gls_loss_val = self.surface_weight * self.gls_loss(pred, true)
-        # self.gls_loss_val += self.surface_weight * self.kl_loss(torch.log(pred), true)
+        
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
             if self.keep_d:
@@ -846,7 +797,8 @@ class BINNCovasim_DRUMS(nn.Module):
                 self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
 
         return self.gls_loss_val + self.pde_loss_val
-
+    
+#--------------------------------Masking Average added as input---------------------------------#
 #-----------------------------------------------------------------------------------------------#
 #--------------------------------no main MLP ---------------------------------------------------#
 class MLPComponentsCV(nn.Module):
