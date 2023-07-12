@@ -580,6 +580,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.n_contacts = params['n_contacts']
         self.delta = params['delta']
         self.tracing_array = tracing_array
+        self.avg_masking = torch.tensor(params['avg_masking'], dtype=torch.float)
 
         self.keep_d = keep_d
 
@@ -627,7 +628,7 @@ class AdaMaskBINNCovasim(nn.Module):
         # h(t) values
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
     
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device) # t,
+        cat_tensor = torch.cat([u[:,[0,3,4]], self.avg_masking.to(inputs.device)], dim=1).float().to(inputs.device) # t,
         eta = self.eta_mask_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
         
