@@ -364,9 +364,6 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
             asymp_factor = 0.5
         )
 
-    # consider new variant
-    have_new_variant = False
-
     # Create, run, and plot the simulation
     fig_name = case_name
     if masking==0:
@@ -379,9 +376,6 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         fig_name = fig_name + '_maskingnorm_' + str(n_runs)
 
     sim = cv.Sim(pars)
-    if have_new_variant:
-        variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
-        sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
 
     msim = cv.MultiSim(sim)
     msim.run(n_runs=num_runs, parallel=model_params.parallel, keep_people=True)
@@ -396,14 +390,6 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         get_data = msim.sims[i].get_analyzer('get_compartments')  # Retrieve by label
 
         compartments = 'STEAYDQRF' if get_data.keep_D else 'STEAYQRF'
-        # get_data.plot(compartments)
-        # res = None
-        # for c in compartments:
-        #     if res is None:
-        #         res = np.array(get_data.__getattribute__(c))
-        #     else:
-        #         res += np.array(get_data.__getattribute__(c))
-        # assert res.max() == sim['pop_size']
         data = pd.DataFrame()
         for c in compartments:
             data[c] = np.array(get_data.__getattribute__(c))
