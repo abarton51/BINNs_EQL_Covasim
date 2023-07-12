@@ -532,8 +532,8 @@ class AdaMaskBINNCovasim(nn.Module):
         self.yita_ub = yita_ub if yita_ub is not None else 0.5
         self.beta_lb = 0.1
         self.beta_ub = 0.3
-        self.tau_lb = 0.1 #   0.01
-        self.tau_ub =  0.3 #  params['tau_ub']
+        self.tau_lb = 0.1
+        self.tau_ub =  0.3
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
@@ -544,7 +544,7 @@ class AdaMaskBINNCovasim(nn.Module):
         # input extrema
         self.t_min = 0.0
         self.t_max = 1.0
-        self.t_max_real = t_max_real # what is max(t) in the real unaltered timescale
+        self.t_max_real = t_max_real
 
         # loss weights
         self.IC_weight = 1e1
@@ -580,7 +580,8 @@ class AdaMaskBINNCovasim(nn.Module):
         self.n_contacts = params['n_contacts']
         self.delta = params['delta']
         self.tracing_array = tracing_array
-        self.avg_masking = torch.tensor(params['avg_masking'], dtype=torch.float)
+        self.avg_masking = params['avg_masking']
+        # self.avg_masking = torch.ones(t_max_real + 1)[:,None] * params['avg_masking']
 
         self.keep_d = keep_d
 
@@ -617,30 +618,30 @@ class AdaMaskBINNCovasim(nn.Module):
         return torch.mean(residual)
 
     def pde_loss(self, inputs, outputs, return_mean=True):
-
         pde_loss = 0
         # unpack inputs
         t = inputs[:, 0][:, None]
 
         # partial derivative computations
         u = outputs.clone()
-        
-        # h(t) values
+
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
-    
-        cat_tensor = torch.cat([u[:,[0,3,4]], self.avg_masking.to(inputs.device)], dim=1).float().to(inputs.device) # t,
+
+        # cat_tensor = torch.cat([u[:,[0,3,4]], self.avg_masking.to(inputs.device)], dim=1) #.float().to(inputs.device)
+        avg_masking = (torch.tensor(self.avg_masking)[:,None]).to(inputs.device)
+        cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1)
         eta = self.eta_mask_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
-        
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device) # 5, 7, 8
+
+        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1) #.float().to(inputs.device)
         beta0 = self.beta_func(yq_tensor)
         # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
         beta = chi_t * beta0
-        
+
         ay_tensor = u[:,[3,4]]
         tau0 = self.tau_func(ay_tensor)
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
-        
+
         # STEAYDQRF model, loop through each compartment
         s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
                                     u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
@@ -696,11 +697,11 @@ class AdaMaskBINNCovasim(nn.Module):
         # constraints on contact_rate function
         yita_final = yita * (a + y)
         deta = Gradient(yita_final, cat_tensor, order=1)
-        self.eta_a_loss = 0
-        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,0] < 0, deta[:,0] ** 2, torch.zeros_like(deta[:,0]))
+        self.eta_s_loss = 0
+        self.eta_s_loss += self.eta_loss_weight * torch.where(deta[:,0] < 0, deta[:,0] ** 2, torch.zeros_like(deta[:,0]))
 
         self.eta_y_loss = 0
-        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
+        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,2] < 0, deta[:,2] ** 2, torch.zeros_like(deta[:,2]))
 
         # constraint on tau function
         dtau = Gradient(tau, ay_tensor, order=1)
@@ -711,23 +712,22 @@ class AdaMaskBINNCovasim(nn.Module):
         self.tau_y_loss += self.tau_loss_weight * torch.where(dtau[:,1] < 0, dtau[:,1] ** 2, torch.zeros_like(dtau[:,1]))
 
         if return_mean:
-            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss) #
+            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss)
         else:
             return pde_loss  # + self.D_loss + self.G_loss + self.T_loss
 
     def pde_loss_no_d(self, inputs, outputs, return_mean=True):
         """ pde loss for the case of removing compartment D"""
         pde_loss = 0
-        # unpack inputs input (N,1) shape
         t = inputs[:, 0][:, None]
 
         # partial derivative computations
         u = outputs.clone()
 
-        contact_rate = self.contact_rate(u[:,[0,3,4]])  # what to input contact_rate MLP
+        contact_rate = self.contact_rate(torch.cat([u[:,[0,3,4]], self.avg_masking.to(inputs.device)], dim=1))
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * contact_rate[:, 0][:, None]
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * self.quarantine_test_prob(u[:,[3,4]])
-        # STEADYQRF model, loop through each compartment
+        # STEAYQRF model, loop through each compartment
         s, tq, e, a, y, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
                                     u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None]
         for i in range(self.n_com):
