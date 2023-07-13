@@ -283,8 +283,6 @@ def get_dynamic_eff(ftype, eff_ub):
 
 
 def dynamic_tracing(sim):
-    #global chi_type_global
-    #global eff_ub_global
     tracing_array = get_dynamic_eff(chi_type_global, eff_ub_global)
     # get tracing intervention
     for cur_inter in sim['interventions']:
