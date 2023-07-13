@@ -125,7 +125,8 @@ class norm_random_masking(cv.Intervention):
     self.p             = np.clip(self.p,self.maskprob_lb,self.maskprob_ub)
     self.masking       = np.random.binomial(1,p=self.p,size=self.pop)
     ppl.rel_sus        = np.where(self.masking,ppl.rel_sus*self.mask_eff,ppl.rel_sus)
-    self.num_masking.append(np.sum(self.masking))
+    global num_masking
+    num_masking   = (np.sum(self.masking))
     self.t.append(sim.t)
     return
 
@@ -190,6 +191,7 @@ class store_compartments(cv.Analyzer):
         self.Q = []  # infectious and quarantined
         self.R = []  # recovered
         self.F = []  # fatal/dead
+        self.M = []  # masking
         self.keep_D = keep_d
         return
 
@@ -213,6 +215,7 @@ class store_compartments(cv.Analyzer):
             assert self.I[-1] == self.A[-1] + self.Y[-1] + self.Q[-1]
         self.R.append(ppl.recovered.sum())
         self.F.append(ppl.dead.sum())
+        self.M.append(num_masking)
         return
 
     def plot(self, given_str):
@@ -364,6 +367,9 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
             asymp_factor = 0.5
         )
 
+    # consider new variant
+    have_new_variant = False
+
     # Create, run, and plot the simulation
     fig_name = case_name
     if masking==0:
@@ -376,6 +382,9 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         fig_name = fig_name + '_maskingnorm_' + str(n_runs)
 
     sim = cv.Sim(pars)
+    if have_new_variant:
+        variant_day, n_imports, rel_beta, wild_imm, rel_death_prob = '2020-04-01', 200, 3, 0.5, 1
+        sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
 
     msim = cv.MultiSim(sim)
     msim.run(n_runs=num_runs, parallel=model_params.parallel, keep_people=True)
@@ -389,13 +398,24 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     for i in range(n_runs):
         get_data = msim.sims[i].get_analyzer('get_compartments')  # Retrieve by label
 
-        compartments = 'STEAYDQRF' if get_data.keep_D else 'STEAYQRF'
+        compartments = 'STEAYDQRFM' if get_data.keep_D else 'STEAYQRF'
+        # get_data.plot(compartments)
+        # res = None
+        # for c in compartments:
+        #     if res is None:
+        #         res = np.array(get_data.__getattribute__(c))
+        #     else:
+        #         res += np.array(get_data.__getattribute__(c))
+        # assert res.max() == sim['pop_size']
         data = pd.DataFrame()
         for c in compartments:
             data[c] = np.array(get_data.__getattribute__(c))
         data_replicates.append(data)
     df_final = reduce(lambda x, y: x + y, data_replicates)
     df_final /= n_runs
+
+
+
 
 
     # prepare the corresponding parameters of compartmental model
