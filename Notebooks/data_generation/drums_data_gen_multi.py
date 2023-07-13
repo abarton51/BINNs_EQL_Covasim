@@ -30,8 +30,7 @@ class ModelParams():
                  dynamic=True,
                  masking=0,
                  parallel=False,
-                 batches=1,
-                 batch_size=1):
+                 batches=1):
         
         global chi_type_global
         global eff_ub_global
@@ -46,7 +45,6 @@ class ModelParams():
         self.masking = masking
         self.parallel = parallel
         self.batches = batches
-        self.batch_size = batch_size
         return
 
 class masking_thresh(cv.Intervention):
@@ -313,15 +311,13 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     Returns:
         None
     '''
-    if model_params.batches>1:
-        n_runs = model_params.batches * model_params.batch_size
-    elif model_params.batches==1:
-        n_runs = num_runs
-    else:
-        raise Exception(f"`batches` must be a positive integer. Instead, the number of batches passed was: {model_params.batches}")
-    
+    # num_runs refers to the batch size
     if num_runs<=0:
         raise Exception(f"`n_runs` must be a positive integer. Instead, the number of runs passed was: {num_runs}")
+    if model_params.batches>=1:
+        total_runs = model_params.batches * num_runs
+    else:
+        raise Exception(f"`batches` must be a positive integer. Instead, the number of batches passed was: {model_params.batches}")
     
     # if no model_params is specified then instantiate ModelParams with default parameter values
     if model_params==None:
@@ -382,13 +378,13 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     # Create, run, and plot the simulation
     fig_name = case_name
     if masking==0:
-        fig_name = fig_name + '_' + str(n_runs)
+        fig_name = fig_name + '_' + str(total_runs)
     elif masking==1:
-        fig_name = fig_name + '_maskingthresh_' + str(n_runs)
+        fig_name = fig_name + '_maskingthresh_' + str(total_runs)
     elif masking==2:
-        fig_name = fig_name + '_maskinguni_' + str(n_runs)
+        fig_name = fig_name + '_maskinguni_' + str(total_runs)
     elif masking==3:
-        fig_name = fig_name + '_maskingnorm_' + str(n_runs)
+        fig_name = fig_name + '_maskingnorm_' + str(total_runs)
 
     sim = cv.Sim(pars)
     if have_new_variant:
@@ -405,7 +401,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
 
     data_replicates = []
     masking_replicates = []
-    for i in range(n_runs):
+    for i in range(total_runs):
         get_data = msim.sims[i].get_analyzer('get_compartments')  # Retrieve by label
 
         compartments = 'STEAYDQRFM' if get_data.keep_D else 'STEAYQRFM'
@@ -419,7 +415,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         masking_replicates.append(masking_arr)
         data_replicates.append(data)
     df_final = reduce(lambda x, y: x + y, data_replicates)
-    df_final /= n_runs
+    df_final /= total_runs
 
 
 
