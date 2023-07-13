@@ -15,6 +15,9 @@ from Notebooks.utils import get_case_name, import_new_variants
 import matplotlib
 matplotlib.use('Agg')
 
+chi_type_global = 'constant'
+eff_ub_global = 0.3
+
 class ModelParams():
     
     def __init__(self, 
@@ -27,8 +30,8 @@ class ModelParams():
                  dynamic=True,
                  masking=0,
                  parallel=False,
-                 batches=0,
-                 batch_size=0):
+                 batches=1,
+                 batch_size=1):
         
         global chi_type_global
         global eff_ub_global
@@ -178,7 +181,7 @@ class uniform_masking(cv.Intervention):
 
 class store_compartments(cv.Analyzer):
 
-    def __init__(self, keep_d, *args, **kwargs):
+    def __init__(self, keep_d, masking, *args, **kwargs):
         super().__init__(*args, **kwargs) # This is necessary to initialize the class properly
         self.t = []
         self.S = []  # susceptible and not quarantined
@@ -193,6 +196,7 @@ class store_compartments(cv.Analyzer):
         self.F = []  # fatal/dead
         self.M = []  # masking
         self.keep_D = keep_d
+        self.masking = masking
         return
 
     def apply(self, sim):
@@ -215,7 +219,8 @@ class store_compartments(cv.Analyzer):
             assert self.I[-1] == self.A[-1] + self.Y[-1] + self.Q[-1]
         self.R.append(ppl.recovered.sum())
         self.F.append(ppl.dead.sum())
-        self.M.append(num_masking)
+        if self.masking > 0:
+            self.M.append(num_masking)
         return
 
     def plot(self, given_str):
@@ -278,7 +283,8 @@ def get_dynamic_eff(ftype, eff_ub):
 
 
 def dynamic_tracing(sim):
-
+    #global chi_type_global
+    #global eff_ub_global
     tracing_array = get_dynamic_eff(chi_type_global, eff_ub_global)
     # get tracing intervention
     for cur_inter in sim['interventions']:
@@ -309,14 +315,19 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     Returns:
         None
     '''
+    if model_params.batches>1:
+        n_runs = model_params.batches * model_params.batch_size
+    elif model_params.batches==1:
+        n_runs = num_runs
+    else:
+        raise Exception(f"`batches` must be a positive integer. Instead, the number of batches passed was: {model_params.batches}")
+    
+    if num_runs<=0:
+        raise Exception(f"`n_runs` must be a positive integer. Instead, the number of runs passed was: {num_runs}")
+    
     # if no model_params is specified then instantiate ModelParams with default parameter values
     if model_params==None:
         model_params = ModelParams()
-
-    if model_params.batches>0:
-        n_runs = model_params.batches * model_params.batch_size
-    else:
-        n_runs = num_runs
 
     population = model_params.population
     keep_d = model_params.keep_d
@@ -351,7 +362,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
             start_day     = '2020-02-01',
             end_day       = '2020-08-01',
             interventions = [tp, ct, dynamic_tracing],
-            analyzers=store_compartments(keep_d, label='get_compartments'),
+            analyzers=store_compartments(keep_d, masking, label='get_compartments'),
             asymp_factor = 0.5
         )
     else:
@@ -363,7 +374,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
             start_day     = '2020-02-01',
             end_day       = '2020-08-01',
             interventions = [tp, ct, dynamic_tracing, mk],
-            analyzers=store_compartments(keep_d, label='get_compartments'),
+            analyzers=store_compartments(keep_d, masking, label='get_compartments'),
             asymp_factor = 0.5
         )
 
@@ -395,26 +406,22 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     plt.close()
 
     data_replicates = []
+    masking_replicates = []
     for i in range(n_runs):
         get_data = msim.sims[i].get_analyzer('get_compartments')  # Retrieve by label
 
-        compartments = 'STEAYDQRFM' if get_data.keep_D else 'STEAYQRF'
-        # get_data.plot(compartments)
-        # res = None
-        # for c in compartments:
-        #     if res is None:
-        #         res = np.array(get_data.__getattribute__(c))
-        #     else:
-        #         res += np.array(get_data.__getattribute__(c))
-        # assert res.max() == sim['pop_size']
+        compartments = 'STEAYDQRFM' if get_data.keep_D else 'STEAYQRFM'
         data = pd.DataFrame()
+        masking_arr = []
         for c in compartments:
-            data[c] = np.array(get_data.__getattribute__(c))
+            if c=='M':
+                masking_arr = np.array(get_data.__getattribute__(c))
+            else:
+                data[c] = np.array(get_data.__getattribute__(c))
+        masking_replicates.append(masking_arr)
         data_replicates.append(data)
     df_final = reduce(lambda x, y: x + y, data_replicates)
     df_final /= n_runs
-
-
 
 
 
@@ -441,6 +448,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     params['data'] = data_replicates.copy() #df_final
     params['dynamic_tracing'] = True
     params['eff_ub'] = eff_ub_global
+    params['avg_masking'] = masking_replicates.copy()
     file_name = 'covasim_'+ fig_name
     file_name += '.joblib'
     file_path = '../../Data/covasim_data/drums_data'
