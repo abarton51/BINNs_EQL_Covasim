@@ -416,7 +416,6 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     df_final /= num_runs
 
 
-
     # prepare the corresponding parameters of compartmental model
     population = sim['pop_size']
     params = {}
