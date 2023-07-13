@@ -618,13 +618,15 @@ class AdaMaskBINNCovasim(nn.Module):
         pde_loss = 0
         # unpack inputs
         t = inputs[:, 0][:, None]
+        print(t.max())
 
         # partial derivative computations
         u = outputs.clone()
 
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
 
-        avg_masking = (torch.tensor(self.avg_masking)[:,None]).to(inputs.device)
+        avg_masking = (torch.tensor(self.avg_masking))[(self.inputs * self.t_max_real).int()].to(inputs.device)
+        print(avg_masking)
         cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1)
         eta = self.eta_mask_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
@@ -889,7 +891,6 @@ class MLPComponentsCV(nn.Module):
         # What we return here goes into the NN as an input for the loss function.
         # In our case, we use the time points to get the indices of the corresponding denoised data
         # and its approximated time derivatives.
-        # print(self.u[(inputs.long() - 1).flatten()].shape)
         return self.u[(inputs.long() - 1).flatten()]
 
     def pde_loss(self, inputs, outputs, return_mean=True):
