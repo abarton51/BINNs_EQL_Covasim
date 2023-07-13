@@ -212,7 +212,7 @@ class BINNCovasim(nn.Module):
         # input extrema
         self.t_min = 0.0
         self.t_max = 1.0
-        self.t_max_real = t_max_real # what is max(t) in the real unaltered timescale
+        self.t_max_real = t_max_real # max(t) in the real unaltered timescale
 
         # loss weights
         self.IC_weight = 1e1
@@ -280,7 +280,7 @@ class BINNCovasim(nn.Module):
         residual *= pred.abs().clamp(min=1.0) ** (-self.gamma)
 
         # apply weights on compartments
-        residual *= self.weights_c
+        residual *= self.weights_c.to(self.inputs.device)
 
         return torch.mean(residual)
 
@@ -295,21 +295,19 @@ class BINNCovasim(nn.Module):
         
         # h(t) values
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
-        # chi_t = torch.nn.functional.interpolate()
         
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device) # t,
+        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1) #.float().to(inputs.device)
         eta = self.eta_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
         
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device) # 5, 7, 8
+        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1) #.float().to(inputs.device) # 5, 7, 8
         beta0 = self.beta_func(yq_tensor)
         # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
-        # beta(S+A+Y) * h(t)
         beta = chi_t * beta0
         
-        ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
+        ay_tensor = u[:,[3,4]]
         tau0 = self.tau_func(ay_tensor)
-        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0 # quarantine_test[:, 0][:, None]
+        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
         
         # STEAYDQRF model, loop through each compartment
         s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
@@ -456,7 +454,7 @@ class BINNCovasim(nn.Module):
         # inputs_rand = torch.cat([x, t], dim=1).float().to(inputs.device)
 
         # predict surface fitter at sampled points
-        outputs_rand = self.surface_fitter(t)
+        outputs_rand = self.surface_fitter(inputs_rand)
 
         # compute surface loss
         self.gls_loss_val = self.surface_weight * self.gls_loss(pred, true)
@@ -631,7 +629,7 @@ class AdaMaskBINNCovasim(nn.Module):
         eta = self.eta_mask_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
 
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1) #.float().to(inputs.device)
+        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1)
         beta0 = self.beta_func(yq_tensor)
         # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
         beta = chi_t * beta0
@@ -753,8 +751,6 @@ class AdaMaskBINNCovasim(nn.Module):
                 pde_loss += (LHS - RHS) ** 2
 
         pde_loss *= self.pde_loss_weight
-
-
         if return_mean:
             return torch.mean(pde_loss)
         else:
