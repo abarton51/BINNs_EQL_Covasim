@@ -314,9 +314,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     # num_runs refers to the batch size
     if num_runs<=0:
         raise Exception(f"`n_runs` must be a positive integer. Instead, the number of runs passed was: {num_runs}")
-    if model_params.batches>=1:
-        total_runs = model_params.batches * num_runs
-    else:
+    if model_params.batches<=0:
         raise Exception(f"`batches` must be a positive integer. Instead, the number of batches passed was: {model_params.batches}")
     
     # if no model_params is specified then instantiate ModelParams with default parameter values
@@ -378,13 +376,13 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     # Create, run, and plot the simulation
     fig_name = case_name
     if masking==0:
-        fig_name = fig_name + '_' + str(total_runs)
+        fig_name = fig_name + '_' + str(num_runs)
     elif masking==1:
-        fig_name = fig_name + '_maskingthresh_' + str(total_runs)
+        fig_name = fig_name + '_maskingthresh_' + str(num_runs)
     elif masking==2:
-        fig_name = fig_name + '_maskinguni_' + str(total_runs)
+        fig_name = fig_name + '_maskinguni_' + str(num_runs)
     elif masking==3:
-        fig_name = fig_name + '_maskingnorm_' + str(total_runs)
+        fig_name = fig_name + '_maskingnorm_' + str(num_runs)
 
     sim = cv.Sim(pars)
     if have_new_variant:
@@ -401,7 +399,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
 
     data_replicates = []
     masking_replicates = []
-    for i in range(total_runs):
+    for i in range(num_runs):
         get_data = msim.sims[i].get_analyzer('get_compartments')  # Retrieve by label
 
         compartments = 'STEAYDQRFM' if get_data.keep_D else 'STEAYQRFM'
@@ -415,7 +413,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         masking_replicates.append(masking_arr)
         data_replicates.append(data)
     df_final = reduce(lambda x, y: x + y, data_replicates)
-    df_final /= total_runs
+    df_final /= num_runs
 
 
 
