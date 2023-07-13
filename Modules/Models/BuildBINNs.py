@@ -367,10 +367,10 @@ class BINNCovasim(nn.Module):
         yita_final = yita * (a + y)
         deta = Gradient(yita_final, cat_tensor, order=1)
         self.eta_a_loss = 0
-        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,0] < 0, deta[:,0] ** 2, torch.zeros_like(deta[:,0]))
+        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
 
         self.eta_y_loss = 0
-        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
+        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,2] < 0, deta[:,2] ** 2, torch.zeros_like(deta[:,2]))
 
         # constraint on tau function
         dtau = Gradient(tau, ay_tensor, order=1)
@@ -581,7 +581,6 @@ class AdaMaskBINNCovasim(nn.Module):
         self.delta = params['delta']
         self.tracing_array = tracing_array
         self.avg_masking = params['avg_masking']
-        # self.avg_masking = torch.ones(t_max_real + 1)[:,None] * params['avg_masking']
 
         self.keep_d = keep_d
 
@@ -627,7 +626,6 @@ class AdaMaskBINNCovasim(nn.Module):
 
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
 
-        # cat_tensor = torch.cat([u[:,[0,3,4]], self.avg_masking.to(inputs.device)], dim=1) #.float().to(inputs.device)
         avg_masking = (torch.tensor(self.avg_masking)[:,None]).to(inputs.device)
         cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1)
         eta = self.eta_mask_func(cat_tensor)
@@ -654,40 +652,31 @@ class AdaMaskBINNCovasim(nn.Module):
             LHS = ut / self.t_max_real
             if i == 0:
                 # dS
-                # RHS = - yita * s * (a + y)  - self.beta * new_d * self.n_contacts * s + self.alpha * tq
                 RHS = - yita * s  * (a + y) - beta * new_d * self.n_contacts * s + self.alpha * tq
             elif i == 1:
                 # dT
-                # RHS = self.beta * new_d * self.n_contacts * s  - self.alpha * tq
                 RHS = beta * new_d * self.n_contacts * s - self.alpha * tq
             elif i == 2:
                 # dE
-                # RHS = yita * s  * (a + y) - self.gamma * e
                 RHS = yita * s * (a + y) - self.gamma * e
             elif i == 3:
                 # dA
-                # RHS = self.p_asymp * self.gamma * e - self.lamda * a - self.beta * new_d * self.n_contacts * a
                 RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
             elif i == 4:
                 # dY
-                # RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - self.beta * new_d * self.n_contacts * y
                 RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - beta * new_d * self.n_contacts * y
             elif i == 5:
                 # dD
-                # RHS = new_d - self.lamda * d - self.delta * d
                 RHS = self.mu * y + tau * q - self.lamda * d - self.delta * d
             elif i == 6:
                 # dQ
-                # RHS = self.beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda) * q - self.delta * q
                 RHS = beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda + self.delta) * q
             elif i == 7:
                 # dR
                 RHS = self.lamda * (a + y + d + q)
-                # self.drdt_loss = self.drdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
             elif i == 8:
                 # dF
                 RHS = self.delta * (y + d + q)
-                # self.dfdt_loss = self.dfdt_weight * torch.where(LHS < 0, LHS ** 2, torch.zeros_like(LHS))
 
             if i in [0, 1, 2, 3, 4, 5, 6]:
                 pde_loss += (LHS - RHS) ** 2
@@ -697,8 +686,8 @@ class AdaMaskBINNCovasim(nn.Module):
         # constraints on contact_rate function
         yita_final = yita * (a + y)
         deta = Gradient(yita_final, cat_tensor, order=1)
-        self.eta_s_loss = 0
-        self.eta_s_loss += self.eta_loss_weight * torch.where(deta[:,0] < 0, deta[:,0] ** 2, torch.zeros_like(deta[:,0]))
+        self.eta_a_loss = 0
+        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
 
         self.eta_y_loss = 0
         self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,2] < 0, deta[:,2] ** 2, torch.zeros_like(deta[:,2]))
@@ -714,7 +703,7 @@ class AdaMaskBINNCovasim(nn.Module):
         if return_mean:
             return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss)
         else:
-            return pde_loss  # + self.D_loss + self.G_loss + self.T_loss
+            return pde_loss
 
     def pde_loss_no_d(self, inputs, outputs, return_mean=True):
         """ pde loss for the case of removing compartment D"""
