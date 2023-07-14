@@ -1,6 +1,9 @@
 <h1 align="center">Incorporating Adaptive Human Behavior into Epidemiological Models Using Equation Learning</h1>
 
+<!---
 ![](https://github.com/abarton51/COVASIM_EQL_BINNS/blob/main/Figures/AdaMask_BINN_fig.png?raw=true)
+-->
+![](https://github.com/abarton51/COVASIM_EQL_BINNS/blob/main/Figures/drums_binn_fig.png?raw=true)
 
 ### GitHub Repository for Equation Learning on Covasim with added Adaptive Behaviors using Biologically-Informed Neural Networks
 
