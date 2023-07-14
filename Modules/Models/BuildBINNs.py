@@ -194,14 +194,13 @@ class BINNCovasim(nn.Module):
         super().__init__()
 
         self.n_com = 9 if keep_d else 8
-        # surface fitter
         self.yita_loss = None
         self.yita_lb = yita_lb if yita_lb is not None else 0.2
         self.yita_ub = yita_ub if yita_ub is not None else 0.4
         self.beta_lb = 0.1
         self.beta_ub = 0.3
-        self.tau_lb = 0.1 #   0.01
-        self.tau_ub =  0.3 #  params['tau_ub']
+        self.tau_lb = 0.1
+        self.tau_ub =  0.3
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
@@ -212,7 +211,7 @@ class BINNCovasim(nn.Module):
         # input extrema
         self.t_min = 0.0
         self.t_max = 1.0
-        self.t_max_real = t_max_real # max(t) in the real unaltered timescale
+        self.t_max_real = t_max_real
 
         # loss weights
         self.IC_weight = 1e1
@@ -232,7 +231,7 @@ class BINNCovasim(nn.Module):
         self.gamma = 0.2
 
         # number of samples for pde loss
-        self.num_samples = 1000
+        # self.num_samples = 1000
 
         self.name = 'covasim_fitter'
 
@@ -243,7 +242,6 @@ class BINNCovasim(nn.Module):
         self.beta = params['beta']
         self.gamma = params['gamma']
         self.mu = params['mu']
-        # self.tau = params['tau'] / 4 if 'tau' in params else None
         self.lamda = params['lamda']
         self.p_asymp = params['p_asymp']
         self.n_contacts = params['n_contacts']
@@ -445,16 +443,17 @@ class BINNCovasim(nn.Module):
         self.pde_loss_val = 0
 
         # load cached inputs from forward pass
-        inputs = self.inputs
+        p = np.random.permutation(len(self.inputs))
+        inputs = self.inputs[p]
 
         # randomly sample from input domain
-        t = torch.rand(self.num_samples, 1, requires_grad=True)
-        t = t * (self.t_max - self.t_min) + self.t_min
-        inputs_rand = t.to(inputs.device)
+        # t = torch.rand(self.num_samples, 1, requires_grad=True)
+        # t = t * (self.t_max - self.t_min) + self.t_min
+        # inputs_rand = t.to(inputs.device)
         # inputs_rand = torch.cat([x, t], dim=1).float().to(inputs.device)
 
         # predict surface fitter at sampled points
-        outputs_rand = self.surface_fitter(inputs_rand)
+        outputs = self.surface_fitter(inputs)
 
         # compute surface loss
         self.gls_loss_val = self.surface_weight * self.gls_loss(pred, true)
@@ -462,9 +461,9 @@ class BINNCovasim(nn.Module):
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
             if self.keep_d:
-                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
+                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs, outputs)
             else:
-                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
+                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs, outputs)
 
         return self.gls_loss_val + self.pde_loss_val
     
@@ -503,10 +502,10 @@ class eta_mask_MLP(nn.Module):
 
 class AdaMaskBINNCovasim(nn.Module):
     '''
-    Constructs a biologically-informed neural network (BINN) composed of
-    average number of contacts sufficient to transmit infection per unit of time (eta),
-    the effective tracing rate (beta), and the rate of diagnoses from people in 
-    quarantine (tau).
+    Constructs a biologically-informed neural network (BINN) for the Covasim model with 
+    an adaptive masking behavior that is composed of the average number of contacts sufficient 
+    to transmit infection per unit of time (eta), the effective tracing rate (beta), and the rate 
+    of diagnoses from people in quarantine (tau).
 
     Args:
         params (dict): dictionary of parameters from COVASIM model.
@@ -562,7 +561,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.gamma = 0.2
 
         # number of samples for pde loss
-        self.num_samples = 1000
+        # self.num_samples = 1000
 
         self.name = 'covasim_fitter'
 
@@ -618,16 +617,16 @@ class AdaMaskBINNCovasim(nn.Module):
         pde_loss = 0
         # unpack inputs
         t = inputs[:, 0][:, None]
-        print(t.max())
-
+        
         # partial derivative computations
         u = outputs.clone()
 
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
 
-        avg_masking = (torch.tensor(self.avg_masking))[(self.inputs * self.t_max_real).int()].to(inputs.device)
-        print(avg_masking)
-        cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1)
+        avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
+        avg_masking = avg_masking[(self.inputs * self.t_max_real).long()]
+        cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
+
         eta = self.eta_mask_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
 
@@ -763,16 +762,17 @@ class AdaMaskBINNCovasim(nn.Module):
         self.gls_loss_val = 0
         self.pde_loss_val = 0
 
-        # load cached inputs from forward pass
-        inputs = self.inputs
+        # load inputs from forward pass
+        p = np.random.permutation(len(self.inputs))
+        inputs = self.inputs[p]
 
         # randomly sample from input domain
-        t = torch.rand(self.num_samples, 1, requires_grad=True)
-        t = t * (self.t_max - self.t_min) + self.t_min
-        inputs_rand = t.to(inputs.device)
+        # t = torch.rand(self.num_samples, 1, requires_grad=True)
+        # t = t * (self.t_max - self.t_min) + self.t_min
+        # inputs_rand = t.to(inputs.device)
 
         # predict surface fitter at sampled points
-        outputs_rand = self.surface_fitter(inputs_rand)
+        outputs = self.surface_fitter(inputs)
 
         # compute surface loss
         self.gls_loss_val = self.surface_weight * self.gls_loss(pred, true)
@@ -780,9 +780,9 @@ class AdaMaskBINNCovasim(nn.Module):
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
             if self.keep_d:
-                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
+                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs, outputs)
             else:
-                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
+                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs, outputs)
 
         return self.gls_loss_val + self.pde_loss_val
     
