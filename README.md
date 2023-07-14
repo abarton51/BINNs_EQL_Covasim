@@ -5,8 +5,9 @@
 ![](https://github.com/abarton51/COVASIM_EQL_BINNS/blob/main/Figures/drums_binn_fig.png?raw=true)
 ![](https://github.com/abarton51/COVASIM_EQL_BINNS/blob/main/Figures/austin_binn_fig.png?raw=true)
 ![](https://github.com/abarton51/COVASIM_EQL_BINNS/blob/main/Figures/austin_binn_schematic.png?raw=true)
--->
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/drums_binn_schematic.png?raw=true)
+-->
+![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/austin_binn_schematic2.png?raw=true)
 
 ### GitHub Repository for Equation Learning on Covasim with added Adaptive Behaviors using Biologically-Informed Neural Networks
 
