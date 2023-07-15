@@ -4,7 +4,7 @@
 -->
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/drums_binn_schematic3_github.png?raw=true)
 
-<h2 align="center">Data Generation, Equation Learning, BINNs, etc. Code Repository</h2>
+<h2 align="center">Project Data Generation, Equation Learning, BINNs, etc. Code Repository</h2>
 <h3 align="center">Authors: Austin Barton, Jonathan Greer, Jordan Klein, Patrick Haughey;&emsp; Mentors: Kevin Flores</h3>
 
 
