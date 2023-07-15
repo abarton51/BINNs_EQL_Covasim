@@ -5,7 +5,7 @@
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/drums_binn_schematic3_github.png?raw=true)
 
 <h2 align="center">DRUMS REU GitHub Repository</h2>
-<h3 align="center">Austin Barton, Jonathan Greer, Jordan Klein, Patrick Haughey; Mentors: Kevin Flores</h3>
+<h3 align="center">Austin Barton, Jonathan Greer, Jordan Klein, Patrick Haughey;&emsp; Mentors: Kevin Flores</h3>
 
 
 All code under the folder titled "covasim" is the work of the ***["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim)***. We use covasim version 3.1.3 for our implementations.
