@@ -599,7 +599,7 @@ class AdaMaskBINNCovasim(nn.Module):
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
 
         avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
-        avg_masking = avg_masking[(self.inputs * self.t_max_real).long()]
+        avg_masking = avg_masking[(t * self.t_max_real).long()]
         cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
         eta = self.eta_mask_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
@@ -825,7 +825,7 @@ class NNComponentsCV(nn.Module):
 
         if self.mask_input:
             avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
-            avg_masking = avg_masking[(self.inputs * self.t_max_real - 1).long()]
+            avg_masking = avg_masking[(t * self.t_max_real - 1).long()]
             cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
         else:
             cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float()
