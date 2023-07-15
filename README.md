@@ -4,7 +4,7 @@
 -->
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/drums_binn_schematic3_github.png?raw=true)
 
-### GitHub Repository for Equation Learning on Covasim with added Adaptive Behaviors using Biologically-Informed Neural Networks
+<h2 align="center">Incorporating Adaptive Human Behavior into Epidemiological Models Using Equation Learning</h2>
 
 All equation learning and BINNs code has been adapted from [[1.]](https://arxiv.org/abs/2005.13073) and [Xin Li](xli86@ncsu.edu).
 
