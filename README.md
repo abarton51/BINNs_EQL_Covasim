@@ -62,14 +62,13 @@ Folder containing numerous utility files.
 - ModelWrapper.py
 - PDESolver.py
 - TimeRemaining.py
-
 ### Notebooks
 This folder contains all the code for training, evaluating, and plotting learned parameter curves.
 ##### data_generation
 Folder that contains files related to interacting with Covasim, generating data, and storing it.
-###### drums_data_gen_multi.py
+- drums_data_gen_multi.py:
 File that generates data from multiple simulations.
-###### DRUMS_data_gen.ipynb
+- DRUMS_data_gen.ipynb:
 Notebook that interacts with data generator files.
 ##### figs
 Folder that contains figures and plots relating to the data such as Covasim generated plots and numerically approximated time derivatives.
