@@ -33,12 +33,9 @@ Folder that contains important figures, schematics, images, etc. for the REU pro
 
 ### models
 This folder contains all the trained models, their outputted compartments, loss, evaluation, and learned parameter curves.
--  **debugging**
-Folder that contains models for the purpose of debugging and exploring results.
--  **denoised**
-Folder that contains trained BINNs models that takes the average compartments over multiple simulations and numerically approximated time derivatives as inputs.
-- **mask**
-Folder that contained trained full BINNs models with average masking as an input into the contact rate function.
+-  **debugging** - Folder that contains models for the purpose of debugging and exploring results.
+-  **denoised** - Folder that contains trained BINNs models that takes the average compartments over multiple simulations and numerically approximated time derivatives as inputs.
+- **mask** - Folder that contained trained full BINNs models with average masking as an input into the contact rate function.
 ### Modules
 This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
 - **Activations** - Folder that contains custom made activation functions.
