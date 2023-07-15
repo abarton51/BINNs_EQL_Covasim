@@ -44,7 +44,7 @@ File for the custom made SoftPlusReLU activation function.
 - **Loaders** - Folder that contains data loaders and formatters.
   - DataFormatter.py:
 File for loading, formatting, and interacting with saved data.
-- **Models**
+- **Models** - Folder containing the neural network models created using PyTorch.
   - BuildBINNs.py:
 File that contains the code for the BINNs models. There are 3 separate models. One being the model created by Xin Li and the others being the models adapted by Austin Barton from Xin Li that bypasses the surface fitting portion of BINNs to focus on learning the parameters.
   - BuildMLP.py: 
