@@ -33,48 +33,48 @@ Folder that contains important figures, schematics, images, etc. for the REU pro
 
 ### models
 This folder contains all the trained models, their outputted compartments, loss, evaluation, and learned parameter curves.
-&emsp; #### debugging
+-  **debugging**
 Folder that contains models for the purpose of debugging and exploring results.
-&emsp; #### denoised
+-  **denoised**
 Folder that contains trained BINNs models that takes the average compartments over multiple simulations and numerically approximated time derivatives as inputs.
-&emsp; #### mask
+- **mask**
 Folder that contained trained full BINNs models with average masking as an input into the contact rate function.
 ### Modules
 This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
-&emsp; #### Activations
+- **Activations**
 Folder that contains custom made activation functions.
-- SoftPlusReLU.py:
+  - SoftPlusReLU.py:
 File for the custom made SoftPlusReLU activation function.
-&emsp; #### Loaders
+- **Loaders**
 Folder that contains data loaders and formatters.
-- DataFormatter.py:
+  - DataFormatter.py:
 File for loading, formatting, and interacting with saved data.
-&emsp; #### Models
-- BuildBINNs.py:
+- **Models**
+  - BuildBINNs.py:
 File that contains the code for the BINNs models. There are 3 separate models. One being the model created by Xin Li and the others being the models adapted by Austin Barton from Xin Li that bypasses the surface fitting portion of BINNs to focus on learning the parameters.
-- BuildMLP.py: 
+  - BuildMLP.py: 
 File that interacts with PyTorch to create a basic multi-layer perceptron (MLP).
-&emsp; #### Utils
+- **Utils**
 Folder containing numerous utility files.
--  GetLowestGPU.py
-- Gradient.py
-- Imports.py
-- ModelWrapper.py
-- PDESolver.py
-- TimeRemaining.py
+  - GetLowestGPU.py
+  - Gradient.py
+  - Imports.py
+  - ModelWrapper.py
+  - PDESolver.py
+  - TimeRemaining.py
 ### Notebooks
 This folder contains all the code for training, evaluating, and plotting learned parameter curves.
-&emsp; ##### data_generation
+- **data_generation**
 Folder that contains files related to interacting with Covasim, generating data, and storing it.
-- drums_data_gen_multi.py:
+  - drums_data_gen_multi.py:
 File that generates data from multiple simulations.
-- DRUMS_data_gen.ipynb:
+  - DRUMS_data_gen.ipynb:
 Notebook that interacts with data generator files.
-&emsp; ##### figs
+- **figs**
 Folder that contains figures and plots relating to the data such as Covasim generated plots and numerically approximated time derivatives.
-&emsp; &emsp; ###### drums
+  - **drums**
 DRUMS REU figures.
-&emsp; &emsp; ##### xin_figs
+  - **xin_figs**
 Xin Li's figures.
 
 ***
