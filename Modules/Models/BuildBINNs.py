@@ -46,27 +46,28 @@ class main_MLP(nn.Module):
 
         return outputs
 
-class infect_rate_MLP(nn.Module):
+class eta_NN(nn.Module):
     '''
-    Construct MLP surrogate model for the contact rate.
-    Includes one hidden layer with 256 ReLU-activated neurons. Output
+    Construct NN surrogate model for the contact rate.
+    Includes one hidden layer with 3 layers of 256 ReLU-activated neurons. Output
     is sigmoid-activated to keep predicted rates between 0 and 1.
 
     Inputs:
-        N/A
+        num_features (int): number of inputs
+        is_mlp (bool): indicate whether or not to be an MLP or a single layer NN
 
     Args:
-        inputs (torch tensor): S, A, Y with shape (N, 3)
+        inputs (torch tensor): S, A, Y, M with shape (N, 4)
 
     Returns:
-        outputs (torch tensor): predicted contact rate, eta(S, A, Y), values with shape (N, 1)
+        outputs (torch tensor): predicted contact rate, eta(S, A, Y, M), values with shape (N, 1)
     '''
 
-    def __init__(self):
+    def __init__(self, num_features=3, is_mlp=False):
         super().__init__()
         self.mlp = BuildMLP(
-            input_features=3,
-            layers=[256, 1],
+            input_features=num_features,
+            layers=[256, 1] if not is_mlp else [256, 256, 256, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
@@ -76,7 +77,7 @@ class infect_rate_MLP(nn.Module):
 
         return outputs
 
-class beta_MLP(nn.Module):
+class beta_NN(nn.Module):
     '''
     Construct MLP surrogate model for the effective tracing rate.
     Includes one hidden layer with 256 ReLU-activated neurons. Output
@@ -92,11 +93,11 @@ class beta_MLP(nn.Module):
         outputs (torch tensor): predicted beta(S+A+Y) values with shape (N, 1)
     '''
 
-    def __init__(self):
+    def __init__(self, is_mlp=False):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
-            layers=[256, 1],
+            layers=[256, 1] if not is_mlp else [256, 256, 256, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
@@ -106,7 +107,7 @@ class beta_MLP(nn.Module):
 
         return outputs
 
-class tau_MLP(nn.Module):
+class tau_NN(nn.Module):
     '''
     Construct MLP surrogate model for the diagnoses rate of quarantined invidividuals.
     Includes one hidden layer with 256 ReLU-activated neurons. Output
@@ -122,11 +123,11 @@ class tau_MLP(nn.Module):
         outputs (torch tensor): predicted diagnoses rates of quarantined, tau(A, Y), values with shape (N, 1)
     '''
 
-    def __init__(self):
+    def __init__(self, is_mlp=False):
         super().__init__()
         self.mlp = BuildMLP(
             input_features=2,
-            layers=[256, 1],
+            layers=[256, 1] if not is_mlp else [256, 256, 256, 1],
             activation=nn.ReLU(),
             linear_output=False,
             output_activation=nn.Sigmoid())  #  SoftplusReLU()
@@ -204,9 +205,9 @@ class BINNCovasim(nn.Module):
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
-        self.eta_func = infect_rate_MLP()
-        self.beta_func = beta_MLP()
-        self.tau_func = tau_MLP()
+        self.eta_func = eta_NN()
+        self.beta_func = beta_NN()
+        self.tau_func = tau_NN()
 
         # input extrema
         self.t_min = 0.0
@@ -467,39 +468,9 @@ class BINNCovasim(nn.Module):
 
         return self.gls_loss_val + self.pde_loss_val
     
-#--------------------------------Original COVASIM_BINN by Xin Li--------------------------------#
-#-----------------------------------------------------------------------------------------------#
-#--------------------------------Masking Average added as input---------------------------------#
-class eta_mask_MLP(nn.Module):
-    '''
-    Construct MLP surrogate model for the contact rate with adaptive masking.
-    Includes one hidden layer with 256 ReLU-activated neurons. Output
-    is sigmoid-activated to keep predicted rates between 0 and 1.
-
-    Inputs:
-        N/A
-
-    Args:
-        inputs (torch tensor): S, A, Y with shape (N, 3)
-
-    Returns:
-        outputs (torch tensor): predicted contact rate, eta(S, A, Y), values with shape (N, 1)
-    '''
-
-    def __init__(self):
-        super().__init__()
-        self.mlp = BuildMLP(
-            input_features=4,
-            layers=[256, 1],
-            activation=nn.ReLU(),
-            linear_output=False,
-            output_activation=nn.Sigmoid())  #  SoftplusReLU()
-
-    def forward(self, inputs):
-        outputs = self.mlp(inputs)
-
-        return outputs
-
+#--------------------------------Original COVASIM_BINN by Xin Li------------------------------------------#
+#---------------------------------------------------------------------------------------------------------#
+#--------------------------------Adaptive Masking---------------------------------------------------------#
 class AdaMaskBINNCovasim(nn.Module):
     '''
     Constructs a biologically-informed neural network (BINN) for the Covasim model with 
@@ -518,15 +489,25 @@ class AdaMaskBINNCovasim(nn.Module):
 
     '''
 
-    def __init__(self, params, t_max_real, tracing_array, yita_lb=None, yita_ub=None, keep_d=False, chi_type=None):
+    def __init__(self, 
+                params, 
+                t_max_real, 
+                tracing_array, 
+                yita_lb=None, 
+                yita_ub=None, 
+                keep_d=False, 
+                chi_type=None,
+                eta_deep=False,
+                beta_deep=False,
+                tau_deep=False):
 
         super().__init__()
 
-        self.n_com = 9 if keep_d else 8
+        self.n_com = 9
         # surface fitter
         self.yita_loss = None
-        self.yita_lb = yita_lb if yita_lb is not None else 0.1
-        self.yita_ub = yita_ub if yita_ub is not None else 0.5
+        self.yita_lb = yita_lb if yita_lb is not None else 0.2
+        self.yita_ub = yita_ub if yita_ub is not None else 0.4
         self.beta_lb = 0.1
         self.beta_ub = 0.3
         self.tau_lb = 0.1
@@ -534,9 +515,9 @@ class AdaMaskBINNCovasim(nn.Module):
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
-        self.eta_mask_func = eta_mask_MLP()
-        self.beta_func = beta_MLP()
-        self.tau_func = tau_MLP()
+        self.eta_mask_func = eta_NN(4, eta_deep)
+        self.beta_func = beta_NN(beta_deep)
+        self.tau_func = tau_NN(tau_deep)
 
         # input extrema
         self.t_min = 0.0
@@ -546,12 +527,9 @@ class AdaMaskBINNCovasim(nn.Module):
         # loss weights
         self.IC_weight = 1e1
         self.surface_weight = 1e2
-        self.pde_weight = 1e4  # 1e4
+        self.pde_weight = 1e4
         
-        if keep_d:
-            self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
-        else:
-            self.weights_c = torch.tensor(np.array([1, 1, 1, 1, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
+        self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
         
         self.pde_loss_weight = 1e0
         self.eta_loss_weight = 1e5
@@ -559,9 +537,6 @@ class AdaMaskBINNCovasim(nn.Module):
 
         # proportionality constant
         self.gamma = 0.2
-
-        # number of samples for pde loss
-        # self.num_samples = 1000
 
         self.name = 'covasim_fitter'
 
@@ -703,59 +678,6 @@ class AdaMaskBINNCovasim(nn.Module):
         else:
             return pde_loss
 
-    def pde_loss_no_d(self, inputs, outputs, return_mean=True):
-        """ pde loss for the case of removing compartment D"""
-        pde_loss = 0
-        t = inputs[:, 0][:, None]
-
-        # partial derivative computations
-        u = outputs.clone()
-
-        contact_rate = self.contact_rate(torch.cat([u[:,[0,3,4]], self.avg_masking.to(inputs.device)], dim=1))
-        yita = self.yita_lb + (self.yita_ub - self.yita_lb) * contact_rate[:, 0][:, None]
-        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * self.quarantine_test_prob(u[:,[3,4]])
-        # STEAYQRF model, loop through each compartment
-        s, tq, e, a, y, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
-                                    u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None]
-        for i in range(self.n_com):
-            d1 = Gradient(u[:, i], inputs, order=1)
-            ut = d1[:, 0][:, None]
-            LHS = ut / self.t_max_real
-            new_d = self.mu * y + tau * q
-            if i == 0:
-                # dS
-                RHS = - yita * s * (a + y)  - self.beta * new_d * self.n_contacts * s + self.alpha * tq
-            elif i == 1:
-                # dT
-                RHS = self.beta * new_d * self.n_contacts * s - self.alpha * tq
-            elif i == 2:
-                # dE
-                RHS = yita * s * (a + y) - self.gamma * e
-            elif i == 3:
-                # dA
-                RHS = self.p_asymp * self.gamma * e - self.lamda * a - self.beta * new_d * self.n_contacts * a
-            elif i == 4:
-                # dY
-                RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - self.beta * new_d * self.n_contacts * y
-            elif i == 5:
-                # dQ
-                RHS = self.beta * new_d * self.n_contacts * (a + y) + self.mu * q - self.delta * q
-            elif i == 6:
-                # dR
-                RHS = self.lamda * (a + y + q)
-            elif i == 7:
-                # dF
-                RHS = self.delta * (y + q)
-                
-            if i in [0, 1, 2, 3, 4, 5]:
-                pde_loss += (LHS - RHS) ** 2
-
-        pde_loss *= self.pde_loss_weight
-        if return_mean:
-            return torch.mean(pde_loss)
-        else:
-            return pde_loss
-
     def loss(self, pred, true):
 
         self.gls_loss_val = 0
@@ -763,31 +685,23 @@ class AdaMaskBINNCovasim(nn.Module):
 
         # load inputs from forward pass
         p = np.random.permutation(len(self.inputs))
-        inputs = self.inputs[p]
-
-        # randomly sample from input domain
-        # t = torch.rand(self.num_samples, 1, requires_grad=True)
-        # t = t * (self.t_max - self.t_min) + self.t_min
-        # inputs_rand = t.to(inputs.device)
+        inputs_rand = self.inputs[p]
 
         # predict surface fitter at sampled points
-        outputs = self.surface_fitter(inputs)
+        outputs_rand = self.surface_fitter(inputs_rand)
 
         # compute surface loss
         self.gls_loss_val = self.surface_weight * self.gls_loss(pred, true)
         
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
-            if self.keep_d:
-                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs, outputs)
-            else:
-                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs, outputs)
+            self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
 
         return self.gls_loss_val + self.pde_loss_val
     
-#--------------------------------Masking Average added as input---------------------------------#
-#-----------------------------------------------------------------------------------------------#
-#--------------------------------no main MLP ---------------------------------------------------#
+#--------------------------------Adaptive Masking input------------------------------------------------#
+#------------------------------------------------------------------------------------------------------#
+#--------------------------------no main MLP ----------------------------------------------------------#
 class MLPComponentsCV(nn.Module):
     '''
     Constructs a neural network that takes in denoised data and numerically approximated derivatives and
@@ -807,11 +721,19 @@ class MLPComponentsCV(nn.Module):
 
     '''
 
-    def __init__(self, params, u_tensor, t_max_real, tracing_array, yita_lb=None, yita_ub=None, keep_d=False, chi_type=None):
+    def __init__(self,
+                params, 
+                u_tensor, 
+                t_max_real, 
+                tracing_array, 
+                yita_lb=None, 
+                yita_ub=None, 
+                keep_d=False, 
+                chi_type=None):
 
         super().__init__()
 
-        self.n_com = 9 if keep_d else 8
+        self.n_com = 9
         
         self.yita_loss = None
         self.yita_lb = yita_lb if yita_lb is not None else 0.2
@@ -822,30 +744,24 @@ class MLPComponentsCV(nn.Module):
         self.tau_ub =  0.3
         
         # store denoised data and numerically approximated derivatives
-        # u_tensor shape: (181, 9, 2)
         self.u_tensor = u_tensor
-        # u shape: (181, 9)
         self.u = u_tensor[:,:,0]
-        # ut shape: (181, 9)
         self.ut = u_tensor[:,:,1]
 
         # pde functions/components
-        self.eta_func = infect_rate_MLP()
-        self.beta_func = beta_MLP()
-        self.tau_func = tau_MLP()
+        self.eta_func = eta_NN()
+        self.beta_func = beta_NN()
+        self.tau_func = tau_NN()
 
         # input extrema
         self.t_min = 0.0
         self.t_max = 1.0
-        self.t_max_real = t_max_real # max(t) in the real unaltered timescale
+        self.t_max_real = t_max_real
 
         # loss weights
-        self.pde_weight = 1e4  # 1e4
+        self.pde_weight = 1e4
 
-        if keep_d:
-            self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
-        else:
-            self.weights_c = torch.tensor(np.array([1, 1, 1, 1, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
+        self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
             
         self.pde_loss_weight = 1e0
         self.eta_loss_weight = 1e5
@@ -853,10 +769,7 @@ class MLPComponentsCV(nn.Module):
 
         # proportionality constant
         self.gamma = 0.2
-
-        # number of samples for pde loss
-        self.num_samples = 1000 # QUESTION: What's going on here? What does it mean by number of sample? Samples for what?
-
+        
         self.name = 'denoised_covasim_fitter'
 
         self.params = params
@@ -885,12 +798,10 @@ class MLPComponentsCV(nn.Module):
     def forward(self, inputs):
         # cache input batch for pde loss
         self.inputs = inputs
-        # print((self.inputs.long() - 1).flatten().shape)
-
         # What we return here goes into the NN as an input for the loss function.
         # In our case, we use the time points to get the indices of the corresponding denoised data
         # and its approximated time derivatives.
-        return self.u[(inputs.long() - 1).flatten()]
+        return self.u[((inputs * self.t_max_real).long() - 1).flatten()]
 
     def pde_loss(self, inputs, outputs, return_mean=True):
 
@@ -899,25 +810,20 @@ class MLPComponentsCV(nn.Module):
         t = inputs.clone()
 
         # surface and partial derivative approximations
-        # shape of outputs: (num_samples, 9, 2)
-        # shape of u: (num_samples, 9)
         u = outputs[:,:,0].clone()
-        # shape of ut: (num_samples, 9)
         ut = outputs[:,:,1].clone()
         
-        # h(t) values
-        chi_t = chi(16 + t, self.eff_ub, self.chi_type)[:,None]
+        chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
        
-       # cat tensor shape: (num_samples, 3)
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
+        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1)
         eta = self.eta_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
         
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device)
+        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1)
         beta0 = self.beta_func(yq_tensor)
         beta = chi_t * beta0
         
-        ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
+        ay_tensor = u[:,[3,4]]
         tau0 = self.tau_func(ay_tensor)
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
         
@@ -925,7 +831,7 @@ class MLPComponentsCV(nn.Module):
         s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
                                     u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
                                     u[:, 8][:, None]
-        # (mu * Y + tau * Q)
+
         new_d = self.mu * y + tau * q
         LHS = ut
         for i in range(self.n_com):
@@ -967,10 +873,10 @@ class MLPComponentsCV(nn.Module):
         yita_final = yita * (a + y)
         deta = Gradient(yita_final, cat_tensor, order=1)
         self.eta_a_loss = 0
-        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,0] < 0, deta[:,0] ** 2, torch.zeros_like(deta[:,0]))
+        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
 
         self.eta_y_loss = 0
-        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
+        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,2] < 0, deta[:,2] ** 2, torch.zeros_like(deta[:,2]))
 
         # constraint on tau function
         dtau = Gradient(tau, ay_tensor, order=1)
@@ -985,198 +891,29 @@ class MLPComponentsCV(nn.Module):
         else:
             return pde_loss
 
-    def pde_loss_no_d(self, inputs, outputs, return_mean=True):
-        """ pde loss for the case of removing compartment D"""
-        pde_loss = 0
-        # unpack inputs
-        t = inputs.clone()
-
-        # surface and partial derivative approximations
-        # shape of outputs: (num_samples, 9, 2)
-        # shape of u: (num_samples, 9)
-        u = outputs[:,:,0].clone()
-        # shape of ut: (num_samples, 9)
-        ut = outputs[:,:,1].clone()
-        
-        # h(t) values
-        chi_t = chi(1 + t, self.eff_ub, self.chi_type)[:,None]
-       
-       # cat tensor shape: (num_samples, 3)
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
-        eta = self.eta_func(cat_tensor)
-        yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
-        
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device)
-        beta0 = self.beta_func(yq_tensor)
-        beta = chi_t * beta0
-        
-        ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
-        tau0 = self.tau_func(ay_tensor)
-        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
-        
-        # STEAYDQRF model, loop through each compartment
-        s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
-                                    u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None]
-        LHS = ut / self.t_max_real
-        for i in range(self.n_com):
-            LHS_i = LHS[:,i]
-            new_d = self.mu * y + tau * q
-            if i == 0:
-                # dS
-                RHS = - yita * s * (a + y)  - beta * new_d * self.n_contacts * s + self.alpha * tq
-            elif i == 1:
-                # dT
-                RHS = beta * new_d * self.n_contacts * s - self.alpha * tq
-            elif i == 2:
-                # dE
-                RHS = yita * s * (a + y) - self.gamma * e
-            elif i == 3:
-                # dA
-                RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
-            elif i == 4:
-                # dY
-                RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - self.beta * new_d * self.n_contacts * y
-            elif i == 5:
-                # dQ
-                RHS = beta * new_d * self.n_contacts * (a + y) + self.mu * q - self.delta * q
-            elif i == 6:
-                # dR
-                RHS = self.lamda * (a + y + q)
-            elif i == 7:
-                # dF
-                RHS = self.delta * (y + q)
-                
-            if i in [0, 1, 2, 3, 4, 5]:
-                pde_loss += (LHS_i - RHS) ** 2
-
-        pde_loss *= self.pde_loss_weight
-
-        if return_mean:
-            return torch.mean(pde_loss)
-        else:
-            return pde_loss
-
     def loss(self, pred, true):
 
         self.pde_loss_val = 0
 
-        # load cached inputs from forward pass - QUESTION: What does this mean and do?
-        inputs = self.inputs
-
-        # randomly sample from input domain
-        t = torch.randint(1, self.t_max_real + 1, (self.num_samples, 1), requires_grad=False).flatten()
+        # load cached inputs from forward pass
+        p = np.random.permutation(self.inputs.shape[0])
+        inputs_rand = self.inputs[p]
         
+        t = (inputs_rand * self.t_max_real).long().flatten().to(self.inputs.device)
         u = self.u[t-1]
         ut = self.ut[t-1]
-        # t = t * (self.t_max - self.t_min) + self.t_min
-        inputs_rand = t.to(inputs.device)
 
         # get predicted surface fit at sampled points
         outputs_rand = torch.cat([u[:,:,None], ut[:,:,None]], axis=2)
         
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
-            if self.keep_d:
-                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
-            else:
-                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
+            self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
 
         return self.pde_loss_val
-#--------------------------------no main_MLP-----------------------------------#
-#----------------------------------------------------------------------------------------------------#
-#--------------------------------deeper parameters---------------------------------------------------#
-class infect_rate_deep_MLP(nn.Module):
-    '''
-    Construct MLP surrogate model for the contact rate.
-    Includes one hidden layer with 3 layers of 128 ReLU-activated neurons. Output
-    is sigmoid-activated to keep predicted rates between 0 and 1.
-
-    Inputs:
-        N/A
-
-    Args:
-        inputs (torch tensor): S, A, Y with shape (N, 3)
-
-    Returns:
-        outputs (torch tensor): predicted contact rate, eta(S, A, Y), values with shape (N, 1)
-    '''
-
-    def __init__(self):
-        super().__init__()
-        self.mlp = BuildMLP(
-            input_features=3,
-            layers=[256, 256, 256, 1],
-            activation=nn.ReLU(),
-            linear_output=False,
-            output_activation=nn.Sigmoid())  #  SoftplusReLU()
-
-    def forward(self, inputs):
-        outputs = self.mlp(inputs)
-
-        return outputs
-
-class beta_deep_MLP(nn.Module):
-    '''
-    Construct MLP surrogate model for the effective tracing rate.
-    Includes one hidden layer with 256 ReLU-activated neurons. Output
-    is sigmoid-activated to keep predicted tracing rates, beta(S+A+Y), between 0 and 1.
-
-    Inputs:
-        N/A
-
-    Args:
-        inputs (torch tensor): S+A+Y with shape (N, 1)
-
-    Returns:
-        outputs (torch tensor): predicted beta(S+A+Y) values with shape (N, 1)
-    '''
-
-    def __init__(self):
-        super().__init__()
-        self.mlp = BuildMLP(
-            input_features=2,
-            layers=[256, 256, 256, 1],
-            activation=nn.ReLU(),
-            linear_output=False,
-            output_activation=nn.Sigmoid())  #  SoftplusReLU()
-
-    def forward(self, inputs):
-        outputs = self.mlp(inputs)
-
-        return outputs
-
-class tau_deep_MLP(nn.Module):
-    '''
-    Construct MLP surrogate model for the diagnoses rate of quarantined invidividuals.
-    Includes one hidden layer with 256 ReLU-activated neurons. Output
-    is sigmoid-activated to keep predicted rates between 0 and 1.
-
-    Inputs:
-        N/A
-
-    Args:
-        inputs (torch tensor): A, Y values with shape (N, 2)
-
-    Returns:
-        outputs (torch tensor): predicted diagnoses rates of quarantined, tau(A, Y), values with shape (N, 1)
-    '''
-
-    def __init__(self):
-        super().__init__()
-        self.mlp = BuildMLP(
-            input_features=2,
-            layers=[256, 256, 256, 1],
-            activation=nn.ReLU(),
-            linear_output=False,
-            output_activation=nn.Sigmoid())  #  SoftplusReLU()
-
-    def forward(self, inputs):
-        outputs = self.mlp(inputs)
-
-        return outputs
-#-----------------------------------------------------------------------------------------------#
-#-----------------------------------------------------------------------------------------------#
-#--------------------------------no main MLP ---------------------------------------------------#
+#--------------------------------no main_MLP-----------------------------------------------------------#
+#------------------------------------------------------------------------------------------------------#
+#--------------------------------deep, no main----------------------------------------------------------#
 class MLPComponentsCVDeep(nn.Module):
     '''
     Constructs a neural network that takes in denoised data and numerically approximated derivatives and
@@ -1211,17 +948,14 @@ class MLPComponentsCVDeep(nn.Module):
         self.tau_ub =  0.3
         
         # store denoised data and numerically approximated derivatives
-        # u_tensor shape: (181, 9, 2)
         self.u_tensor = u_tensor
-        # u shape: (181, 9)
         self.u = u_tensor[:,:,0]
-        # ut shape: (181, 9)
         self.ut = u_tensor[:,:,1]
 
         # pde functions/components
-        self.eta_func = infect_rate_deep_MLP()
-        self.beta_func = beta_deep_MLP()
-        self.tau_func = tau_deep_MLP()
+        self.eta_func = eta_NN()
+        self.beta_func = beta_NN()
+        self.tau_func = tau_NN()
 
         # input extrema
         self.t_min = 0.0
@@ -1229,12 +963,7 @@ class MLPComponentsCVDeep(nn.Module):
         self.t_max_real = t_max_real # max(t) in the real unaltered timescale
 
         # loss weights
-        self.pde_weight = 1e4  # 1e4
-
-        if keep_d:
-            self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
-        else:
-            self.weights_c = torch.tensor(np.array([1, 1, 1, 1, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
+        self.pde_weight = 1e4
             
         self.pde_loss_weight = 1e0
         self.eta_loss_weight = 1e5
@@ -1375,77 +1104,6 @@ class MLPComponentsCVDeep(nn.Module):
         else:
             return pde_loss
 
-    def pde_loss_no_d(self, inputs, outputs, return_mean=True):
-        """ pde loss for the case of removing compartment D"""
-        pde_loss = 0
-        # unpack inputs
-        t = inputs.clone()
-
-        # surface and partial derivative approximations
-        # shape of outputs: (num_samples, 9, 2)
-        # shape of u: (num_samples, 9)
-        u = outputs[:,:,0].clone()
-        # shape of ut: (num_samples, 9)
-        ut = outputs[:,:,1].clone()
-        
-        # h(t) values
-        chi_t = chi(1 + t, self.eff_ub, self.chi_type)[:,None]
-       
-       # cat tensor shape: (num_samples, 3)
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
-        eta = self.eta_func(cat_tensor)
-        yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
-        
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device)
-        beta0 = self.beta_func(yq_tensor)
-        beta = chi_t * beta0
-        
-        ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
-        tau0 = self.tau_func(ay_tensor)
-        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
-        
-        # STEAYDQRF model, loop through each compartment
-        s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
-                                    u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None]
-        LHS = ut / self.t_max_real
-        for i in range(self.n_com):
-            LHS_i = LHS[:,i]
-            new_d = self.mu * y + tau * q
-            if i == 0:
-                # dS
-                RHS = - yita * s * (a + y)  - beta * new_d * self.n_contacts * s + self.alpha * tq
-            elif i == 1:
-                # dT
-                RHS = beta * new_d * self.n_contacts * s - self.alpha * tq
-            elif i == 2:
-                # dE
-                RHS = yita * s * (a + y) - self.gamma * e
-            elif i == 3:
-                # dA
-                RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
-            elif i == 4:
-                # dY
-                RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - self.beta * new_d * self.n_contacts * y
-            elif i == 5:
-                # dQ
-                RHS = beta * new_d * self.n_contacts * (a + y) + self.mu * q - self.delta * q
-            elif i == 6:
-                # dR
-                RHS = self.lamda * (a + y + q)
-            elif i == 7:
-                # dF
-                RHS = self.delta * (y + q)
-                
-            if i in [0, 1, 2, 3, 4, 5]:
-                pde_loss += (LHS_i - RHS) ** 2
-
-        pde_loss *= self.pde_loss_weight
-
-        if return_mean:
-            return torch.mean(pde_loss)
-        else:
-            return pde_loss
-
     def loss(self, pred, true):
 
         self.pde_loss_val = 0
@@ -1472,5 +1130,220 @@ class MLPComponentsCVDeep(nn.Module):
                 self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
 
         return self.pde_loss_val
-#--------------------------------no main_MLP 2.0-----------------------------------------------------#
-#----------------------------------------------------------------------------------------------------#
+#--------------------------------deep, no main----------------------------------------------------------#
+#-------------------------------------------------------------------------------------------------------#
+#--------------------------------deep, mask, no main----------------------------------------------------#
+class MLPComponentsCVDeep_Mask(nn.Module):
+    '''
+    Constructs a neural network that takes in denoised data and numerically approximated derivatives and
+    uses them as inputs and loss components for 3 embedded multilayer perceptrons consisting of the average 
+    number of contacts sufficient to transmit infection per unit of time (eta), the effective tracing rate (beta), 
+    and the rate of diagnoses from people in quarantine (tau).
+
+    Args:
+        params (dict): dictionary of parameters from COVASIM model.
+        u_tensor (tensor): Tensor object containing matrix of approx. solutions and derivatives wrt time.
+        t_max_real (float): the unscaled maximum time point (t).
+        tracing_array (array): array values of tracing probabilities as a function of time (t).
+        yita_lb (float): yita lower bound.
+        yita_ub (float): yita upper bound.
+        keep_d (bool): If true, then include D (diagnosed) in model, otherwise exlcude it.
+        chi_type (func): real-valued function of function that affects the quarantining rate.
+
+    '''
+
+    def __init__(self, 
+                params, 
+                u_tensor, 
+                t_max_real, 
+                tracing_array, 
+                yita_lb=None, 
+                yita_ub=None, 
+                keep_d=True, 
+                chi_type=None,
+                eta_deep=True,
+                beta_deep=False,
+                tau_deep=False):
+
+        super().__init__()
+
+        self.n_com = 9
+        
+        self.yita_loss = None
+        self.yita_lb = yita_lb if yita_lb is not None else 0.1
+        self.yita_ub = yita_ub if yita_ub is not None else 0.5
+        self.beta_lb = 0.1
+        self.beta_ub = 0.3
+        self.tau_lb = 0.1
+        self.tau_ub =  0.3
+        
+        # store denoised data and numerically approximated derivatives
+        self.u_tensor = u_tensor
+        self.u = u_tensor[:,:,0]
+        self.ut = u_tensor[:,:,1]
+
+        # pde functions/components
+        self.eta_mask_func = eta_NN(4, eta_deep)
+        self.beta_func = beta_NN(beta_deep)
+        self.tau_func = tau_NN(tau_deep)
+
+        # input extrema
+        self.t_min = 0.0
+        self.t_max = 1.0
+        self.t_max_real = t_max_real
+
+        # loss weights
+        self.pde_weight = 1e5
+            
+        self.pde_loss_weight = 1e0
+        self.eta_loss_weight = 1e5
+        self.tau_loss_weight = 1e5
+
+        # proportionality constant
+        self.gamma = 0.2
+
+        self.name = 'denoised_covasim_fitter'
+
+        self.params = params
+
+        self.population = params['population']
+        self.alpha = params['alpha']
+        self.beta = params['beta']
+        self.gamma = params['gamma']
+        self.mu = params['mu']
+        self.lamda = params['lamda']
+        self.p_asymp = params['p_asymp']
+        self.n_contacts = params['n_contacts']
+        self.delta = params['delta']
+        self.tracing_array = tracing_array
+        self.avg_masking = params['avg_masking'][1:t_max_real]
+
+        self.keep_d = keep_d
+
+        # if dynamic
+        if 'dynamic_tracing' in params:
+            self.is_dynamic = True
+        self.eff_ub = params['eff_ub']
+
+        self.chi_type = chi_type if chi_type is not None else None
+
+
+    def forward(self, inputs):
+        # cache input batch for pde loss
+        self.inputs = inputs
+        # What we return here goes into the NN as an input for the loss function.
+        # In our case, we use the time points to get the indices of the corresponding denoised data
+        # and its approximated time derivatives.
+        return self.u[((inputs * self.t_max_real - 1).long()).flatten()]
+
+    def pde_loss(self, inputs, outputs, return_mean=True):
+
+        pde_loss = 0
+        # unpack inputs
+        t = inputs.clone()
+
+        # surface and partial derivative approximations
+        u = outputs[:,:,0].clone()
+        ut = outputs[:,:,1].clone()
+        
+        chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
+
+        avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
+        avg_masking = avg_masking[(self.inputs * self.t_max_real - 1).long()]
+        cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
+        eta = self.eta_mask_func(cat_tensor)
+        yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
+        
+        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1)
+        beta0 = self.beta_func(yq_tensor)
+        beta = chi_t * beta0
+        
+        ay_tensor = u[:,[3,4]]
+        tau0 = self.tau_func(ay_tensor)
+        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
+        
+        # STEAYDQRF model, loop through each compartment
+        s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
+                                    u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
+                                    u[:, 8][:, None]
+        # (mu * Y + tau * Q)
+        new_d = self.mu * y + tau * q
+        LHS = ut
+        for i in range(self.n_com):
+            LHS_i = LHS[:,i]
+            if i == 0:
+                # dS
+                RHS = - yita * s  * (a + y) - beta * new_d * self.n_contacts * s + self.alpha * tq
+            elif i == 1:
+                # dT
+                RHS = beta * new_d * self.n_contacts * s - self.alpha * tq
+            elif i == 2:
+                # dE
+                RHS = yita * s * (a + y) - self.gamma * e
+            elif i == 3:
+                # dA
+                RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
+            elif i == 4:
+                # dY
+                RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - beta * new_d * self.n_contacts * y
+            elif i == 5:
+                # dD
+                RHS = self.mu * y + tau * q - self.lamda * d - self.delta * d
+            elif i == 6:
+                # dQ
+                RHS = beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda + self.delta) * q
+            elif i == 7:
+                # dR
+                RHS = self.lamda * (a + y + d + q)
+            elif i == 8:
+                # dF
+                RHS = self.delta * (y + d + q)
+
+            if i in [0, 1, 2, 3, 4, 5, 6]:
+                pde_loss += (LHS_i - RHS) ** 2
+
+        pde_loss *= self.pde_loss_weight
+
+        # constraints on contact_rate function
+        yita_final = yita * (a + y)
+        deta = Gradient(yita_final, cat_tensor, order=1)
+        self.eta_a_loss = 0
+        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
+
+        self.eta_y_loss = 0
+        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,2] < 0, deta[:,2] ** 2, torch.zeros_like(deta[:,2]))
+
+        # constraint on tau function
+        dtau = Gradient(tau, ay_tensor, order=1)
+        self.tau_a_loss = 0
+        self.tau_a_loss += self.tau_loss_weight * torch.where(dtau[:,0] < 0, dtau[:,0] ** 2, torch.zeros_like(dtau[:,0]))
+
+        self.tau_y_loss = 0
+        self.tau_y_loss += self.tau_loss_weight * torch.where(dtau[:,1] < 0, dtau[:,1] ** 2, torch.zeros_like(dtau[:,1]))
+
+        if return_mean:
+            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss)
+        else:
+            return pde_loss
+
+    def loss(self, pred, true):
+
+        self.pde_loss_val = 0
+
+        # load cached inputs from forward pass - QUESTION: What does this mean and do?
+        p = np.random.permutation(self.inputs.shape[0])
+        inputs_rand = self.inputs[p]
+        
+        t = (inputs_rand * self.t_max_real - 1).long().flatten().to(self.inputs.device)
+        u = self.u[t-1]
+        ut = self.ut[t-1]
+
+        # get predicted surface fit at sampled points
+        outputs_rand = torch.cat([u[:,:,None], ut[:,:,None]], axis=2)
+        
+        # compute PDE loss at sampled locations
+        if self.pde_weight != 0:
+            self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
+
+        return self.pde_loss_val
+#--------------------------------deep, mask, no main-----------------------------------------------------#
