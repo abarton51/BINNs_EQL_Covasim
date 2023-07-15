@@ -684,7 +684,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.pde_loss_val = 0
 
         # load inputs from forward pass
-        p = np.random.permutation(len(self.inputs))
+        p = np.random.permutation(self.inputs.shape[0])
         inputs_rand = self.inputs[p]
 
         # predict surface fitter at sampled points
@@ -700,440 +700,9 @@ class AdaMaskBINNCovasim(nn.Module):
         return self.gls_loss_val + self.pde_loss_val
     
 #--------------------------------Adaptive Masking input------------------------------------------------#
-#------------------------------------------------------------------------------------------------------#
-#--------------------------------no main MLP ----------------------------------------------------------#
-class MLPComponentsCV(nn.Module):
-    '''
-    Constructs a neural network that takes in denoised data and numerically approximated derivatives and
-    uses them as inputs and loss components for 3 embedded multilayer perceptrons consisting of the average 
-    number of contacts sufficient to transmit infection per unit of time (eta), the effective tracing rate (beta), 
-    and the rate of diagnoses from people in quarantine (tau).
-
-    Args:
-        params (dict): dictionary of parameters from COVASIM model.
-        u_tensor (tensor): Tensor object containing matrix of approx. solutions and derivatives wrt time.
-        t_max_real (float): the unscaled maximum time point (t).
-        tracing_array (array): array values of tracing probabilities as a function of time (t).
-        yita_lb (float): yita lower bound.
-        yita_ub (float): yita upper bound.
-        keep_d (bool): If true, then include D (diagnosed) in model, otherwise exlcude it.
-        chi_type (func): real-valued function of function that affects the quarantining rate.
-
-    '''
-
-    def __init__(self,
-                params, 
-                u_tensor, 
-                t_max_real, 
-                tracing_array, 
-                yita_lb=None, 
-                yita_ub=None, 
-                keep_d=False, 
-                chi_type=None):
-
-        super().__init__()
-
-        self.n_com = 9
-        
-        self.yita_loss = None
-        self.yita_lb = yita_lb if yita_lb is not None else 0.2
-        self.yita_ub = yita_ub if yita_ub is not None else 0.4
-        self.beta_lb = 0.1
-        self.beta_ub = 0.3
-        self.tau_lb = 0.1
-        self.tau_ub =  0.3
-        
-        # store denoised data and numerically approximated derivatives
-        self.u_tensor = u_tensor
-        self.u = u_tensor[:,:,0]
-        self.ut = u_tensor[:,:,1]
-
-        # pde functions/components
-        self.eta_func = eta_NN()
-        self.beta_func = beta_NN()
-        self.tau_func = tau_NN()
-
-        # input extrema
-        self.t_min = 0.0
-        self.t_max = 1.0
-        self.t_max_real = t_max_real
-
-        # loss weights
-        self.pde_weight = 1e4
-
-        self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
-            
-        self.pde_loss_weight = 1e0
-        self.eta_loss_weight = 1e5
-        self.tau_loss_weight = 1e5
-
-        # proportionality constant
-        self.gamma = 0.2
-        
-        self.name = 'denoised_covasim_fitter'
-
-        self.params = params
-
-        self.population = params['population']
-        self.alpha = params['alpha']
-        self.beta = params['beta']
-        self.gamma = params['gamma']
-        self.mu = params['mu']
-        self.lamda = params['lamda']
-        self.p_asymp = params['p_asymp']
-        self.n_contacts = params['n_contacts']
-        self.delta = params['delta']
-        self.tracing_array = tracing_array
-
-        self.keep_d = keep_d
-
-        # if dynamic
-        if 'dynamic_tracing' in params:
-            self.is_dynamic = True
-        self.eff_ub = params['eff_ub']
-
-        self.chi_type = chi_type if chi_type is not None else None
-
-
-    def forward(self, inputs):
-        # cache input batch for pde loss
-        self.inputs = inputs
-        # What we return here goes into the NN as an input for the loss function.
-        # In our case, we use the time points to get the indices of the corresponding denoised data
-        # and its approximated time derivatives.
-        return self.u[((inputs * self.t_max_real).long() - 1).flatten()]
-
-    def pde_loss(self, inputs, outputs, return_mean=True):
-
-        pde_loss = 0
-        # unpack inputs
-        t = inputs.clone()
-
-        # surface and partial derivative approximations
-        u = outputs[:,:,0].clone()
-        ut = outputs[:,:,1].clone()
-        
-        chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
-       
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1)
-        eta = self.eta_func(cat_tensor)
-        yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
-        
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1)
-        beta0 = self.beta_func(yq_tensor)
-        beta = chi_t * beta0
-        
-        ay_tensor = u[:,[3,4]]
-        tau0 = self.tau_func(ay_tensor)
-        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
-        
-        # STEAYDQRF model, loop through each compartment
-        s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
-                                    u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
-                                    u[:, 8][:, None]
-
-        new_d = self.mu * y + tau * q
-        LHS = ut
-        for i in range(self.n_com):
-            LHS_i = LHS[:,i]
-            if i == 0:
-                # dS
-                RHS = - yita * s  * (a + y) - beta * new_d * self.n_contacts * s + self.alpha * tq
-            elif i == 1:
-                # dT
-                RHS = beta * new_d * self.n_contacts * s - self.alpha * tq
-            elif i == 2:
-                # dE
-                RHS = yita * s * (a + y) - self.gamma * e
-            elif i == 3:
-                # dA
-                RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
-            elif i == 4:
-                # dY
-                RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - beta * new_d * self.n_contacts * y
-            elif i == 5:
-                # dD
-                RHS = self.mu * y + tau * q - self.lamda * d - self.delta * d
-            elif i == 6:
-                # dQ
-                RHS = beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda + self.delta) * q
-            elif i == 7:
-                # dR
-                RHS = self.lamda * (a + y + d + q)
-            elif i == 8:
-                # dF
-                RHS = self.delta * (y + d + q)
-
-            if i in [0, 1, 2, 3, 4, 5, 6]:
-                pde_loss += (LHS_i - RHS) ** 2
-
-        pde_loss *= self.pde_loss_weight
-
-        # constraints on contact_rate function
-        yita_final = yita * (a + y)
-        deta = Gradient(yita_final, cat_tensor, order=1)
-        self.eta_a_loss = 0
-        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
-
-        self.eta_y_loss = 0
-        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,2] < 0, deta[:,2] ** 2, torch.zeros_like(deta[:,2]))
-
-        # constraint on tau function
-        dtau = Gradient(tau, ay_tensor, order=1)
-        self.tau_a_loss = 0
-        self.tau_a_loss += self.tau_loss_weight * torch.where(dtau[:,0] < 0, dtau[:,0] ** 2, torch.zeros_like(dtau[:,0]))
-
-        self.tau_y_loss = 0
-        self.tau_y_loss += self.tau_loss_weight * torch.where(dtau[:,1] < 0, dtau[:,1] ** 2, torch.zeros_like(dtau[:,1]))
-
-        if return_mean:
-            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss)
-        else:
-            return pde_loss
-
-    def loss(self, pred, true):
-
-        self.pde_loss_val = 0
-
-        # load cached inputs from forward pass
-        p = np.random.permutation(self.inputs.shape[0])
-        inputs_rand = self.inputs[p]
-        
-        t = (inputs_rand * self.t_max_real).long().flatten().to(self.inputs.device)
-        u = self.u[t-1]
-        ut = self.ut[t-1]
-
-        # get predicted surface fit at sampled points
-        outputs_rand = torch.cat([u[:,:,None], ut[:,:,None]], axis=2)
-        
-        # compute PDE loss at sampled locations
-        if self.pde_weight != 0:
-            self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
-
-        return self.pde_loss_val
-#--------------------------------no main_MLP-----------------------------------------------------------#
-#------------------------------------------------------------------------------------------------------#
-#--------------------------------deep, no main----------------------------------------------------------#
-class MLPComponentsCVDeep(nn.Module):
-    '''
-    Constructs a neural network that takes in denoised data and numerically approximated derivatives and
-    uses them as inputs and loss components for 3 embedded multilayer perceptrons consisting of the average 
-    number of contacts sufficient to transmit infection per unit of time (eta), the effective tracing rate (beta), 
-    and the rate of diagnoses from people in quarantine (tau).
-
-    Args:
-        params (dict): dictionary of parameters from COVASIM model.
-        u_tensor (tensor): Tensor object containing matrix of approx. solutions and derivatives wrt time.
-        t_max_real (float): the unscaled maximum time point (t).
-        tracing_array (array): array values of tracing probabilities as a function of time (t).
-        yita_lb (float): yita lower bound.
-        yita_ub (float): yita upper bound.
-        keep_d (bool): If true, then include D (diagnosed) in model, otherwise exlcude it.
-        chi_type (func): real-valued function of function that affects the quarantining rate.
-
-    '''
-
-    def __init__(self, params, u_tensor, t_max_real, tracing_array, yita_lb=None, yita_ub=None, keep_d=False, chi_type=None):
-
-        super().__init__()
-
-        self.n_com = 9 if keep_d else 8
-        
-        self.yita_loss = None
-        self.yita_lb = yita_lb if yita_lb is not None else 0.2
-        self.yita_ub = yita_ub if yita_ub is not None else 0.4
-        self.beta_lb = 0.1
-        self.beta_ub = 0.3
-        self.tau_lb = 0.1
-        self.tau_ub =  0.3
-        
-        # store denoised data and numerically approximated derivatives
-        self.u_tensor = u_tensor
-        self.u = u_tensor[:,:,0]
-        self.ut = u_tensor[:,:,1]
-
-        # pde functions/components
-        self.eta_func = eta_NN()
-        self.beta_func = beta_NN()
-        self.tau_func = tau_NN()
-
-        # input extrema
-        self.t_min = 0.0
-        self.t_max = 1.0
-        self.t_max_real = t_max_real # max(t) in the real unaltered timescale
-
-        # loss weights
-        self.pde_weight = 1e4
-            
-        self.pde_loss_weight = 1e0
-        self.eta_loss_weight = 1e5
-        self.tau_loss_weight = 1e5
-
-        # proportionality constant
-        self.gamma = 0.2
-
-        # number of samples for pde loss
-        self.num_samples = 1000 # QUESTION: What's going on here? What does it mean by number of sample? Samples for what?
-
-        self.name = 'denoised_covasim_fitter'
-
-        self.params = params
-
-        self.population = params['population']
-        self.alpha = params['alpha']
-        self.beta = params['beta']
-        self.gamma = params['gamma']
-        self.mu = params['mu']
-        self.lamda = params['lamda']
-        self.p_asymp = params['p_asymp']
-        self.n_contacts = params['n_contacts']
-        self.delta = params['delta']
-        self.tracing_array = tracing_array
-
-        self.keep_d = keep_d
-
-        # if dynamic
-        if 'dynamic_tracing' in params:
-            self.is_dynamic = True
-        self.eff_ub = params['eff_ub']
-
-        self.chi_type = chi_type if chi_type is not None else None
-
-
-    def forward(self, inputs):
-        # cache input batch for pde loss
-        self.inputs = inputs
-        # print((self.inputs.long() - 1).flatten().shape)
-
-        # What we return here goes into the NN as an input for the loss function.
-        # In our case, we use the time points to get the indices of the corresponding denoised data
-        # and its approximated time derivatives.
-        # print(self.u[(inputs.long() - 1).flatten()].shape)
-        return self.u[(inputs.long() - 1).flatten()]
-
-    def pde_loss(self, inputs, outputs, return_mean=True):
-
-        pde_loss = 0
-        # unpack inputs
-        t = inputs.clone()
-
-        # surface and partial derivative approximations
-        # shape of outputs: (num_samples, 9, 2)
-        # shape of u: (num_samples, 9)
-        u = outputs[:,:,0].clone()
-        # shape of ut: (num_samples, 9)
-        ut = outputs[:,:,1].clone()
-        
-        # h(t) values
-        chi_t = chi(1 + t, self.eff_ub, self.chi_type)[:,None]
-       
-       # cat tensor shape: (num_samples, 3)
-        cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float().to(inputs.device)
-        eta = self.eta_func(cat_tensor)
-        yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
-        
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1).float().to(inputs.device)
-        beta0 = self.beta_func(yq_tensor)
-        beta = chi_t * beta0
-        
-        ay_tensor = torch.Tensor(u[:,[3,4]]).float().to(inputs.device)
-        tau0 = self.tau_func(ay_tensor)
-        tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
-        
-        # STEAYDQRF model, loop through each compartment
-        s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
-                                    u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
-                                    u[:, 8][:, None]
-        # (mu * Y + tau * Q)
-        new_d = self.mu * y + tau * q
-        LHS = ut
-        for i in range(self.n_com):
-            LHS_i = LHS[:,i]
-            if i == 0:
-                # dS
-                RHS = - yita * s  * (a + y) - beta * new_d * self.n_contacts * s + self.alpha * tq
-            elif i == 1:
-                # dT
-                RHS = beta * new_d * self.n_contacts * s - self.alpha * tq
-            elif i == 2:
-                # dE
-                RHS = yita * s * (a + y) - self.gamma * e
-            elif i == 3:
-                # dA
-                RHS = self.p_asymp * self.gamma * e - self.lamda * a - beta * new_d * self.n_contacts * a
-            elif i == 4:
-                # dY
-                RHS = (1 - self.p_asymp) * self.gamma * e - (self.mu + self.lamda + self.delta) * y - beta * new_d * self.n_contacts * y
-            elif i == 5:
-                # dD
-                RHS = self.mu * y + tau * q - self.lamda * d - self.delta * d
-            elif i == 6:
-                # dQ
-                RHS = beta * new_d * self.n_contacts * (a + y) - (tau + self.lamda + self.delta) * q
-            elif i == 7:
-                # dR
-                RHS = self.lamda * (a + y + d + q)
-            elif i == 8:
-                # dF
-                RHS = self.delta * (y + d + q)
-
-            if i in [0, 1, 2, 3, 4, 5, 6]:
-                pde_loss += (LHS_i - RHS) ** 2
-
-        pde_loss *= self.pde_loss_weight
-
-        # constraints on contact_rate function
-        yita_final = yita * (a + y)
-        deta = Gradient(yita_final, cat_tensor, order=1)
-        self.eta_a_loss = 0
-        self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,0] < 0, deta[:,0] ** 2, torch.zeros_like(deta[:,0]))
-
-        self.eta_y_loss = 0
-        self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
-
-        # constraint on tau function
-        dtau = Gradient(tau, ay_tensor, order=1)
-        self.tau_a_loss = 0
-        self.tau_a_loss += self.tau_loss_weight * torch.where(dtau[:,0] < 0, dtau[:,0] ** 2, torch.zeros_like(dtau[:,0]))
-
-        self.tau_y_loss = 0
-        self.tau_y_loss += self.tau_loss_weight * torch.where(dtau[:,1] < 0, dtau[:,1] ** 2, torch.zeros_like(dtau[:,1]))
-
-        if return_mean:
-            return torch.mean(pde_loss  + self.eta_a_loss + self.eta_y_loss + self.tau_a_loss + self.tau_y_loss)
-        else:
-            return pde_loss
-
-    def loss(self, pred, true):
-
-        self.pde_loss_val = 0
-
-        # load cached inputs from forward pass - QUESTION: What does this mean and do?
-        inputs = self.inputs
-
-        # randomly sample from input domain
-        t = torch.randint(1, self.t_max_real + 1, (self.num_samples, 1), requires_grad=False).flatten()
-        
-        u = self.u[t-1]
-        ut = self.ut[t-1]
-        # t = t * (self.t_max - self.t_min) + self.t_min
-        inputs_rand = t.to(inputs.device)
-
-        # get predicted surface fit at sampled points
-        outputs_rand = torch.cat([u[:,:,None], ut[:,:,None]], axis=2)
-        
-        # compute PDE loss at sampled locations
-        if self.pde_weight != 0:
-            if self.keep_d:
-                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
-            else:
-                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
-
-        return self.pde_loss_val
-#--------------------------------deep, no main----------------------------------------------------------#
 #-------------------------------------------------------------------------------------------------------#
 #--------------------------------deep, mask, no main----------------------------------------------------#
-class MLPComponentsCVDeep_Mask(nn.Module):
+class NNComponentsCV(nn.Module):
     '''
     Constructs a neural network that takes in denoised data and numerically approximated derivatives and
     uses them as inputs and loss components for 3 embedded multilayer perceptrons consisting of the average 
@@ -1149,7 +718,10 @@ class MLPComponentsCVDeep_Mask(nn.Module):
         yita_ub (float): yita upper bound.
         keep_d (bool): If true, then include D (diagnosed) in model, otherwise exlcude it.
         chi_type (func): real-valued function of function that affects the quarantining rate.
-
+        masking (bool): Indicate if average masking is an input into contact rate.
+        eta_deep (bool): Indiactes whether eta is 3 layers (true) or 1 layer (false).
+        beta_deep (bool): Indiactes whether beta is 3 layers (true) or 1 layer (false).
+        tau_deep (bool): Indiactes whether tau is 3 layers (true) or 1 layer (false).
     '''
 
     def __init__(self, 
@@ -1161,7 +733,8 @@ class MLPComponentsCVDeep_Mask(nn.Module):
                 yita_ub=None, 
                 keep_d=True, 
                 chi_type=None,
-                eta_deep=True,
+                mask_input=False,
+                eta_deep=False,
                 beta_deep=False,
                 tau_deep=False):
 
@@ -1183,7 +756,7 @@ class MLPComponentsCVDeep_Mask(nn.Module):
         self.ut = u_tensor[:,:,1]
 
         # pde functions/components
-        self.eta_mask_func = eta_NN(4, eta_deep)
+        self.eta_func = eta_NN(eta_deep) if not mask_input else eta_NN(4, eta_deep)
         self.beta_func = beta_NN(beta_deep)
         self.tau_func = tau_NN(tau_deep)
 
@@ -1216,9 +789,11 @@ class MLPComponentsCVDeep_Mask(nn.Module):
         self.n_contacts = params['n_contacts']
         self.delta = params['delta']
         self.tracing_array = tracing_array
-        self.avg_masking = params['avg_masking'][1:t_max_real]
+        if mask_input:
+            self.avg_masking = params['avg_masking'][1:t_max_real]
 
         self.keep_d = keep_d
+        self.mask_input = mask_input
 
         # if dynamic
         if 'dynamic_tracing' in params:
@@ -1248,10 +823,13 @@ class MLPComponentsCVDeep_Mask(nn.Module):
         
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
 
-        avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
-        avg_masking = avg_masking[(self.inputs * self.t_max_real - 1).long()]
-        cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
-        eta = self.eta_mask_func(cat_tensor)
+        if self.mask_input:
+            avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
+            avg_masking = avg_masking[(self.inputs * self.t_max_real - 1).long()]
+            cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
+        else:
+            cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float()
+        eta = self.eta_func(cat_tensor)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
         
         yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1)
