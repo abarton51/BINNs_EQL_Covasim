@@ -32,12 +32,12 @@ Folder that contains all the data and compartmental plots from Covasim generated
 Folder that contains important figures, schematics, images, etc. for the REU project.
 
 ### models
-This folder contains all the trained models, their outputted compartments, loss, evaluation, and learned parameter curves.
+Folder that contains all the trained models, their outputted compartments, loss, evaluation, and learned parameter curves.
 -  **debugging** - Folder that contains models for the purpose of debugging and exploring results.
 -  **denoised** - Folder that contains trained BINNs models that takes the average compartments over multiple simulations and numerically approximated time derivatives as inputs.
 - **mask** - Folder that contained trained full BINNs models with average masking as an input into the contact rate function.
 ### Modules
-This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
+Folder that acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
 - **Activations** - Folder that contains custom made activation functions.
   - SoftPlusReLU.py:
 File for the custom made SoftPlusReLU activation function.
@@ -57,7 +57,7 @@ File that interacts with PyTorch to create a basic multi-layer perceptron (MLP).
   - PDESolver.py
   - TimeRemaining.py
 ### Notebooks
-This folder contains all the code for training, evaluating, and plotting learned parameter curves.
+Folder that contains all the code for training, evaluating, and plotting learned parameter curves.
 - **data_generation** - Folder that contains files related to interacting with Covasim, generating data, and storing it.
   - drums_data_gen_multi.py:
 File that generates data from multiple simulations.
