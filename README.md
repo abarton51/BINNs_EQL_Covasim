@@ -6,7 +6,7 @@
 
 <h2 align="center">DRUMS REU GitHub Repository</h2>
 <h3 align="center">Austin Barton, Jonathan Greer, Jordan Klein, Patrick Haughey; Mentors: Kevin Flores</h3>
-
+***
 All equation learning and BINNs code has been adapted from [[1.]](https://arxiv.org/abs/2005.13073) and [Xin Li](xli86@ncsu.edu).
 
 All code under the folder titled "covasim" is the work of the ***["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim)***. We use covasim version 3.1.3 for our implementations.
