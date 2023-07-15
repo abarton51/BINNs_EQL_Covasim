@@ -43,25 +43,25 @@ Folder that contained trained full BINNs models with average masking as an input
 This folder acts as a library containing all the models, model wrappers, helper functions, data storage and loading, etc.
 #### Activations
 Folder that contains custom made activation functions.
-##### SoftPlusReLU.py
+- SoftPlusReLU.py:
 File for the custom made SoftPlusReLU activation function.
 #### Loaders
 Folder that contains data loaders and formatters.
-##### DataFormatter.py
+- DataFormatter.py:
 File for loading, formatting, and interacting with saved data.
 #### Models
-##### BuildBINNs.py: 
+- BuildBINNs.py:
 File that contains the code for the BINNs models. There are 3 separate models. One being the model created by Xin Li and the others being the models adapted by Austin Barton from Xin Li that bypasses the surface fitting portion of BINNs to focus on learning the parameters.
-##### BuildMLP.py: 
+- BuildMLP.py: 
 File that interacts with PyTorch to create a basic multi-layer perceptron (MLP).
 #### Utils
 Folder containing numerous utility files.
-##### GetLowestGPU.py
-##### Gradient.py
-##### Imports.py
-##### ModelWrapper.py
-##### PDESolver.py
-##### TimeRemaining.py
+-  GetLowestGPU.py
+- Gradient.py
+- Imports.py
+- ModelWrapper.py
+- PDESolver.py
+- TimeRemaining.py
 
 ### Notebooks
 This folder contains all the code for training, evaluating, and plotting learned parameter curves.
