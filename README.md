@@ -23,9 +23,6 @@ Equation learning and BINNs code has been adapted from [[1.]](https://arxiv.org/
 
 ***
 ## Directory
-### covasim
-Folder that contains all code for Covasim version 3.1.3 created by the ["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim). This is the simulator our code interacts with to generate data.
-
 ### Data
 Folder that contains all the data and compartmental plots from Covasim generated data.
 
@@ -67,6 +64,8 @@ Notebook that interacts with data generator files.
 - **figs** - Folder that contains figures and plots relating to the data such as Covasim generated plots and numerically approximated time derivatives.
   - **drums** - DRUMS REU figures.
   - **xin_figs** - Xin Li's figures.
+### covasim
+Folder that contains all code for Covasim version 3.1.3 created by the ["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim). This is the simulator our code interacts with to generate data.
 
 ***
 ## References
