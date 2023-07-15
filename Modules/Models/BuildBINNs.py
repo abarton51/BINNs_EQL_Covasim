@@ -444,8 +444,8 @@ class BINNCovasim(nn.Module):
         self.pde_loss_val = 0
 
         # load cached inputs from forward pass
-        p = np.random.permutation(len(self.inputs))
-        inputs = self.inputs[p]
+        p = np.random.permutation(self.inputs.shape[0])
+        inputs_rand = self.inputs[p]
 
         # randomly sample from input domain
         # t = torch.rand(self.num_samples, 1, requires_grad=True)
@@ -454,7 +454,7 @@ class BINNCovasim(nn.Module):
         # inputs_rand = torch.cat([x, t], dim=1).float().to(inputs.device)
 
         # predict surface fitter at sampled points
-        outputs = self.surface_fitter(inputs)
+        outputs_rand = self.surface_fitter(inputs_rand)
 
         # compute surface loss
         self.gls_loss_val = self.surface_weight * self.gls_loss(pred, true)
@@ -462,9 +462,9 @@ class BINNCovasim(nn.Module):
         # compute PDE loss at sampled locations
         if self.pde_weight != 0:
             if self.keep_d:
-                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs, outputs)
+                self.pde_loss_val += self.pde_weight * self.pde_loss(inputs_rand, outputs_rand)
             else:
-                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs, outputs)
+                self.pde_loss_val += self.pde_weight * self.pde_loss_no_d(inputs_rand, outputs_rand)
 
         return self.gls_loss_val + self.pde_loss_val
     
@@ -506,12 +506,12 @@ class AdaMaskBINNCovasim(nn.Module):
         self.n_com = 9
         # surface fitter
         self.yita_loss = None
-        self.yita_lb = yita_lb if yita_lb is not None else 0.2
-        self.yita_ub = yita_ub if yita_ub is not None else 0.4
-        self.beta_lb = 0.1
-        self.beta_ub = 0.3
-        self.tau_lb = 0.1
-        self.tau_ub =  0.3
+        self.yita_lb = yita_lb if yita_lb is not None else 0.0
+        self.yita_ub = yita_ub if yita_ub is not None else 1.0
+        self.beta_lb = 0.0
+        self.beta_ub = 0.5
+        self.tau_lb = 0.0
+        self.tau_ub =  0.5
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
@@ -743,12 +743,12 @@ class NNComponentsCV(nn.Module):
         self.n_com = 9
         
         self.yita_loss = None
-        self.yita_lb = yita_lb if yita_lb is not None else 0.1
-        self.yita_ub = yita_ub if yita_ub is not None else 0.5
-        self.beta_lb = 0.1
-        self.beta_ub = 0.3
-        self.tau_lb = 0.1
-        self.tau_ub =  0.3
+        self.yita_lb = yita_lb if yita_lb is not None else 0.0
+        self.yita_ub = yita_ub if yita_ub is not None else 1.0
+        self.beta_lb = 0.0
+        self.beta_ub = 0.5
+        self.tau_lb = 0.0
+        self.tau_ub =  0.5
         
         # store denoised data and numerically approximated derivatives
         self.u_tensor = u_tensor
@@ -913,8 +913,8 @@ class NNComponentsCV(nn.Module):
         inputs_rand = self.inputs[p]
         
         t = (inputs_rand * self.t_max_real - 1).long().flatten().to(self.inputs.device)
-        u = self.u[t-1]
-        ut = self.ut[t-1]
+        u = self.u[t]
+        ut = self.ut[t]
 
         # get predicted surface fit at sampled points
         outputs_rand = torch.cat([u[:,:,None], ut[:,:,None]], axis=2)
