@@ -57,7 +57,7 @@ def DRUMS_Lasso(
     X_poly = poly.fit_transform(data_x)
     
     # Create a Lasso object and fit the data
-    lasso = LassoCV(fit_intercept=intercept, cv=cv)
+    lasso = LassoCV(fit_intercept=intercept, cv=cv, alphas=alphas)
     lasso.fit(X_poly, lhs_values)
     
     # Get the coefficients and feature names
@@ -66,11 +66,11 @@ def DRUMS_Lasso(
     feature_names = poly.get_feature_names_out(input_features=input_terms)
 
     # Print the equation
-    equation = "F = "
+    equation = "f = "
     for coef, name in zip(coefs, feature_names):
-        if abs(coef) > 1e-5:
-            equation += f"{coef:.4f}*{name} + "
-    equation = equation[:-3] + f' + {intercept:.4f}'
+        if abs(coef) > 1e-6:
+            equation += f"{coef:.5f}*{name} + "
+    equation = equation[:-3] + f' + {intercept:.5f}'
     
     # Make predictions on the training data
     y_pred = lasso.predict(X_poly)
