@@ -69,8 +69,8 @@ def DRUMS_Lasso(
     equation = "F = "
     for coef, name in zip(coefs, feature_names):
         if abs(coef) > 1e-5:
-            equation += f"{coef:.2f}*{name} + "
-    equation = equation[:-3] + f' + {intercept:.2f}'
+            equation += f"{coef:.4f}*{name} + "
+    equation = equation[:-3] + f' + {intercept:.4f}'
     
     # Make predictions on the training data
     y_pred = lasso.predict(X_poly)
