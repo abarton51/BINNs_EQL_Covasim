@@ -10,6 +10,8 @@ from sklearn.linear_model import lasso_path
 from itertools import cycle
 import covasim as cv
 
+from scipy.stats.qmc import LatinHypercube
+
 def import_new_variants(sim, start_day, n_imports, rel_beta, wild_imm, rel_death_prob=1, rescale=True):
 
     my_var = cv.variant(variant={'rel_beta': rel_beta, 'rel_death_prob': rel_death_prob},
@@ -81,6 +83,8 @@ def plot_loss_convergence(total_train_losses, total_val_losses, rel_save_thresh,
     # plt.show()
 
 def lasso_parameter_fitting(data_x, data_y, parameter_name, save_path, case_name, fit_intercept, term_names):
+    print('We\'re in Lasso Parameter Fitting')
+    
     N = len(data_x)
     split = int(0.8 * N)
     p = np.random.permutation(N)
@@ -145,4 +149,18 @@ def lasso_parameter_fitting(data_x, data_y, parameter_name, save_path, case_name
         coefs = np.concatenate((final_lasso.intercept_, final_lasso.coef_))
     else:
         coefs = final_lasso.coef_
+
+
     pd.DataFrame(coefs).to_csv(os.path.join(save_path, case_name + '_regression_coef_' + parameter_name + '.csv'))
+
+
+# def DRUMS_lasso(
+#     input_vars : list[str], 
+#     x_mesh : numpy.ndarray,
+#     y_vals : numpy.ndarray, 
+#     degree : int
+#     cv : int
+#     alpha : float
+# ) -> dict[str : float]
+
+

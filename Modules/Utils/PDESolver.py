@@ -21,7 +21,7 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
-h = 1e-16
+h = 1e-8
 
 def D_u(D,dx):
     
@@ -112,6 +112,7 @@ def PDE_sim(RHS,IC,x,t,D,f):
     y[:, 0] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
+
     r.set_initial_value(y0, t[0])   # initial values
     for i in range(1, t_sim.size):
         
@@ -142,6 +143,8 @@ def STEAYDQRF_RHS(t, y, contact_rate, quarantine_test, params, t_max):
     params (dict): parameters of the Covasim model.
     t_max (float): the maximum value of time in the t array.
     '''
+
+    h = 1e-8
 
     population = params['population']
     alpha = params['alpha']
@@ -239,6 +242,8 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
         (array): numpy array of values of each differential term in the ODE system.
     '''
 
+    h = 1e-8
+
     population = params['population']
     alpha = params['alpha']
     # beta = params['beta']
@@ -261,7 +266,9 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
     yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
 
     if analyze_eta == True:
-        yita += complex(0,h)
+        yita += h
+        print("yita")
+        print(yita)
 
 
 
@@ -272,15 +279,19 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
     beta = chi * beta0
 
     if analyze_beta == True:
-        beta += complex(0,h)
-    # print(beta)
+        
+        beta = beta + h
+        #print("beta")
+        #print(beta)
 
     ay_array = y[None, :][:, [3, 4]].reshape(1,-1)
     tau0 = tau_func(ay_array)
     tau = params['tau_lb'] + (params['tau_ub'] - params['tau_lb']) * tau0
 
     if analyze_tau == True:
-        tau += complex(0,h)
+        tau += h
+        print("tau")
+        print(tau)
 
 
     # current compartment values
@@ -315,7 +326,12 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
 
     # print(np.array([ds, dt, de, da, dy, dd, dq, dr, df]).sum())
 
-    return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
+    #return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
+    dif_list = [ds, dt, de, da, dy, dd, dq, dr, df]  # Replace ds, dt, de, da, dy, dd, dq, dr, df with your actual values
+
+    my_array = np.asarray([np.float128(x.item()) if isinstance(x, np.ndarray) else np.float128(x) for x in dif_list])
+
+    return my_array
 
 
 def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type, analyze_beta = False, analyze_eta = False, analyze_tau = False):
@@ -361,6 +377,7 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
     y[0,:] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
+
     r.set_initial_value(y[0,:], t[0])  # initial values
     for i in range(1, t_sim.size):
 
@@ -375,9 +392,13 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
             print("integration failed")
             return 1e6 * np.ones(y.shape)
         
+    '''
     
     if np.iscomplex(y).any():
+        print("Is complex!!!!!!")
         y = np.imag(y)/h
+    '''
+    
 
 
     return y
@@ -461,6 +482,7 @@ def STEAYQRF_sim(RHS, IC, t, contact_rate, quarantine_test, params):
     y[0,:] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
+
     r.set_initial_value(y[0,:], t[0])  # initial values
     for i in range(1, t_sim.size):
 
@@ -505,6 +527,7 @@ def SEPAYRHD_sim(RHS, IC, t, contact_rate, quarantine_test):
     y[0,:] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
+
     r.set_initial_value(y[0,:], t[0])  # initial values
     for i in range(1, t_sim.size):
 
