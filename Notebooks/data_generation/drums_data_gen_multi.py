@@ -15,6 +15,9 @@ from Notebooks.utils import get_case_name, import_new_variants
 import matplotlib
 matplotlib.use('Agg')
 
+chi_type_global = 'constant'
+eff_ub_global = 0.3
+
 class ModelParams():
     
     def __init__(self, 
@@ -25,7 +28,9 @@ class ModelParams():
                  chi_type='constant', 
                  keep_d=True, 
                  dynamic=True,
-                 masking=0):
+                 masking=0,
+                 parallel=False,
+                 batches=1):
         
         global chi_type_global
         global eff_ub_global
@@ -38,6 +43,8 @@ class ModelParams():
         self.keep_d = keep_d
         self.dynamic = dynamic
         self.masking = masking
+        self.parallel = parallel
+        self.batches = batches
         return
 
 class masking_thresh(cv.Intervention):
@@ -119,7 +126,8 @@ class norm_random_masking(cv.Intervention):
     self.p             = np.clip(self.p,self.maskprob_lb,self.maskprob_ub)
     self.masking       = np.random.binomial(1,p=self.p,size=self.pop)
     ppl.rel_sus        = np.where(self.masking,ppl.rel_sus*self.mask_eff,ppl.rel_sus)
-    self.num_masking.append(np.sum(self.masking))
+    global num_masking
+    num_masking   = (np.sum(self.masking))
     self.t.append(sim.t)
     return
 
@@ -171,7 +179,7 @@ class uniform_masking(cv.Intervention):
 
 class store_compartments(cv.Analyzer):
 
-    def __init__(self, keep_d, *args, **kwargs):
+    def __init__(self, keep_d, masking, *args, **kwargs):
         super().__init__(*args, **kwargs) # This is necessary to initialize the class properly
         self.t = []
         self.S = []  # susceptible and not quarantined
@@ -184,7 +192,9 @@ class store_compartments(cv.Analyzer):
         self.Q = []  # infectious and quarantined
         self.R = []  # recovered
         self.F = []  # fatal/dead
+        self.M = []  # masking
         self.keep_D = keep_d
+        self.masking = masking
         return
 
     def apply(self, sim):
@@ -207,6 +217,8 @@ class store_compartments(cv.Analyzer):
             assert self.I[-1] == self.A[-1] + self.Y[-1] + self.Q[-1]
         self.R.append(ppl.recovered.sum())
         self.F.append(ppl.dead.sum())
+        if self.masking > 0:
+            self.M.append(num_masking)
         return
 
     def plot(self, given_str):
@@ -269,7 +281,6 @@ def get_dynamic_eff(ftype, eff_ub):
 
 
 def dynamic_tracing(sim):
-
     tracing_array = get_dynamic_eff(chi_type_global, eff_ub_global)
     # get tracing intervention
     for cur_inter in sim['interventions']:
@@ -294,19 +305,24 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     
     Args:
         model_params (Object): ModelParams object that stores covasim model parameters.
-        n_runs (int): number of simulations to complete to computer sample means of results.
+        num_runs (int): number of simulations to complete to computer sample means of results.
+                        Note: n_runs is not the same as num_runs. n_runs is for naming purposes.
     
     Returns:
         None
     '''
+    # num_runs refers to the batch size
+    if num_runs<=0:
+        raise Exception(f"`n_runs` must be a positive integer. Instead, the number of runs passed was: {num_runs}")
+    if model_params.batches<=0:
+        raise Exception(f"`batches` must be a positive integer. Instead, the number of batches passed was: {model_params.batches}")
+    
     # if no model_params is specified then instantiate ModelParams with default parameter values
     if model_params==None:
         model_params = ModelParams()
 
-    n_runs = num_runs
     population = model_params.population
     keep_d = model_params.keep_d
-    # dynamic = model_params.dynamic
     masking = model_params.masking
 
     # Define the testing and contact tracing interventions
@@ -327,7 +343,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
 
-    case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=True)
+    case_name = get_case_name(population, test_scale, eff_ub_global, keep_d, dynamic=model_params.dynamic)
     case_name = '_'.join([case_name, chi_type_global])
     if masking==0:
         # Define the default parameters (no masking)
@@ -338,7 +354,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
             start_day     = '2020-02-01',
             end_day       = '2020-08-01',
             interventions = [tp, ct, dynamic_tracing],
-            analyzers=store_compartments(keep_d, label='get_compartments'),
+            analyzers=store_compartments(keep_d, masking, label='get_compartments'),
             asymp_factor = 0.5
         )
     else:
@@ -350,7 +366,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
             start_day     = '2020-02-01',
             end_day       = '2020-08-01',
             interventions = [tp, ct, dynamic_tracing, mk],
-            analyzers=store_compartments(keep_d, label='get_compartments'),
+            analyzers=store_compartments(keep_d, masking, label='get_compartments'),
             asymp_factor = 0.5
         )
 
@@ -360,13 +376,13 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     # Create, run, and plot the simulation
     fig_name = case_name
     if masking==0:
-        fig_name = fig_name + '_' + str(n_runs)
+        fig_name = fig_name + '_' + str(num_runs)
     elif masking==1:
-        fig_name = fig_name + '_maskingthresh_' + str(n_runs)
+        fig_name = fig_name + '_maskingthresh_' + str(num_runs)
     elif masking==2:
-        fig_name = fig_name + '_maskinguni_' + str(n_runs)
+        fig_name = fig_name + '_maskinguni_' + str(num_runs)
     elif masking==3:
-        fig_name = fig_name + '_maskingnorm_' + str(n_runs)
+        fig_name = fig_name + '_maskingnorm_' + str(num_runs)
 
     sim = cv.Sim(pars)
     if have_new_variant:
@@ -374,7 +390,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         sim = import_new_variants(sim, variant_day, n_imports, rel_beta, wild_imm, rel_death_prob=rel_death_prob)
 
     msim = cv.MultiSim(sim)
-    msim.run(n_runs=n_runs, parallel=False, keep_people=True)
+    msim.run(n_runs=num_runs, parallel=model_params.parallel, keep_people=True)
     msim.mean()
     msim.plot(to_plot=['new_infections_by_variant','new_infections', 'new_tests', 'new_diagnoses', 'cum_diagnoses', 'new_quarantined', 'test_yield'],
              do_show=False)
@@ -382,27 +398,22 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     plt.close()
 
     data_replicates = []
-    for i in range(n_runs):
+    masking_replicates = []
+    for i in range(num_runs):
         get_data = msim.sims[i].get_analyzer('get_compartments')  # Retrieve by label
 
-        compartments = 'STEAYDQRF' if get_data.keep_D else 'STEAYQRF'
-        # get_data.plot(compartments)
-        # res = None
-        # for c in compartments:
-        #     if res is None:
-        #         res = np.array(get_data.__getattribute__(c))
-        #     else:
-        #         res += np.array(get_data.__getattribute__(c))
-        # assert res.max() == sim['pop_size']
+        compartments = 'STEAYDQRFM' if get_data.keep_D else 'STEAYQRFM'
         data = pd.DataFrame()
+        masking_arr = []
         for c in compartments:
-            data[c] = np.array(get_data.__getattribute__(c))
+            if c=='M':
+                masking_arr = np.array(get_data.__getattribute__(c))
+            else:
+                data[c] = np.array(get_data.__getattribute__(c))
+        masking_replicates.append(masking_arr)
         data_replicates.append(data)
     df_final = reduce(lambda x, y: x + y, data_replicates)
-    df_final /= n_runs
-
-
-
+    df_final /= num_runs
 
 
     # prepare the corresponding parameters of compartmental model
@@ -428,9 +439,7 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
     params['data'] = data_replicates.copy() #df_final
     params['dynamic_tracing'] = True
     params['eff_ub'] = eff_ub_global
-    masking_avg = None
-    params['masking_avg'] = None
-    print(mk.num_masking)
+    params['avg_masking'] = masking_replicates.copy()
     file_name = 'covasim_'+ fig_name
     file_name += '.joblib'
     file_path = '../../Data/covasim_data/drums_data'

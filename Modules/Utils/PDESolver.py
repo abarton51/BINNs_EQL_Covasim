@@ -21,8 +21,6 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
-h = 1e-8
-
 def D_u(D,dx):
     
     '''
@@ -112,7 +110,6 @@ def PDE_sim(RHS,IC,x,t,D,f):
     y[:, 0] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
-
     r.set_initial_value(y0, t[0])   # initial values
     for i in range(1, t_sim.size):
         
@@ -143,8 +140,6 @@ def STEAYDQRF_RHS(t, y, contact_rate, quarantine_test, params, t_max):
     params (dict): parameters of the Covasim model.
     t_max (float): the maximum value of time in the t array.
     '''
-
-    h = 1e-8
 
     population = params['population']
     alpha = params['alpha']
@@ -224,7 +219,7 @@ def chi_func(t, chi_type):
         factor = eff_ub
     return factor
 
-def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type, analyze_beta = False, analyze_eta = False, analyze_tau = False):
+def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type):
     '''
     RHS evaluation of learned components for the STEAYDQRF model.
     
@@ -242,58 +237,102 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
         (array): numpy array of values of each differential term in the ODE system.
     '''
 
-    h = 1e-8
-
     population = params['population']
     alpha = params['alpha']
-    # beta = params['beta']
     gamma = params['gamma']
     mu = params['mu']
-    # tau = params['tau'] / 4
     lamda = params['lamda']
     p_asymp = params['p_asymp']
     n_contacts = params['n_contacts']
     delta = params['delta']
 
     eff_ub = params['eff_ub']
-    # chi = (eff_ub / 30) * (t + 1) if t < 30.0 else  eff_ub
-    # chi = eff_ub
-    # chi = 0.3 *  (1 + np.sin((t + 1) * np.pi / 40.)) / 2
     chi = chi_func(t, chi_type)
     # get contact rates from learned MLP
     array = y[None, :][:, [0, 3, 4]].reshape(1,-1) # , chi
     cr = contact_rate(array).reshape(-1)
     yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
-
-    if analyze_eta == True:
-        yita += h
-        print("yita")
-        print(yita)
-
-
-
     yq_array = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
-    # yq_array = y[None, :][:, [4, 6]].reshape(1,-1)
     beta0 = quarantine_test(yq_array).reshape(-1)
-    # beta = params['beta_lb'] + (params['beta_ub'] - params['beta_lb']) * beta0
     beta = chi * beta0
-
-    if analyze_beta == True:
-        
-        beta = beta + h
-        #print("beta")
-        #print(beta)
-
+    
     ay_array = y[None, :][:, [3, 4]].reshape(1,-1)
     tau0 = tau_func(ay_array)
     tau = params['tau_lb'] + (params['tau_ub'] - params['tau_lb']) * tau0
+    # current compartment values
+    s, tq, e, a, y, d, q, r, f = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7], y[8]
+    new_d = mu * y +  tau * q
+    # dS
+    ds = - yita * s * (a + y) - beta * new_d *  n_contacts * s + alpha * tq
 
-    if analyze_tau == True:
-        tau += h
-        print("tau")
-        print(tau)
+    # dT
+    dt =  beta * new_d *  n_contacts * s - alpha * tq
 
+    # dE
+    de = yita * s * (a + y) - gamma * e
 
+    # dA
+    da =  p_asymp * gamma * e - lamda * a - beta * new_d *  n_contacts * a
+
+    # dY
+    dy = (1 - p_asymp) * gamma * e - (mu + lamda + delta) * y - beta * new_d *  n_contacts * y
+
+    # dD
+    dd =  mu * y + tau * q - lamda * d - delta * d
+
+    # dQ
+    dq =  beta * new_d *  n_contacts * (a + y) - (tau + delta) * q
+
+    # dR
+    dr =  lamda * (a + y + d ) #
+
+    # dF
+    df =  delta * (y + d + q) #
+
+    return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
+
+def STEAYDQRF_RHS_dynamic_masking(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type):
+    '''
+    RHS evaluation of learned components for the STEAYDQRF model.
+    
+    Args:
+        t (array): time vector.
+        y (array): vector of values of STEAYDQRF.
+        contact_rate (func): the contact rate learned MLP in the BINN model.
+        quarantine_test (func): the quarantining rate learned MLP in the BINN model.
+        tau_func (func): the quarantine diagnoses rate learned MLP in the BINN model.
+        params (dict): paramters of COVASIM model.
+        t_max (float): the maximum value of time in the t array.
+        chi_type (str): string indicated the type of function chi is.
+    
+    Returns:
+        (array): numpy array of values of each differential term in the ODE system.
+    '''
+
+    population = params['population']
+    alpha = params['alpha']
+    gamma = params['gamma']
+    mu = params['mu']
+    lamda = params['lamda']
+    p_asymp = params['p_asymp']
+    n_contacts = params['n_contacts']
+    delta = params['delta']
+    avg_masking = params['avg_masking']
+    eff_ub = params['eff_ub']
+    
+    chi = chi_func(t, chi_type)
+    # get contact rates from learned MLP
+    array = y[None, :][:, [0, 3, 4]].reshape(1,-1)
+    array = np.append(array,avg_masking[int(t * t_max)])
+    cr = contact_rate(array).reshape(-1)
+    yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
+    yq_array = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
+    beta0 = quarantine_test(yq_array).reshape(-1)
+    beta = chi * beta0
+    
+    ay_array = y[None, :][:, [3, 4]].reshape(1,-1)
+    tau0 = tau_func(ay_array)
+    tau = params['tau_lb'] + (params['tau_ub'] - params['tau_lb']) * tau0
     # current compartment values
     s, tq, e, a, y, d, q, r, f = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7], y[8]
     new_d = mu * y +  tau * q
@@ -326,15 +365,9 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
 
     # print(np.array([ds, dt, de, da, dy, dd, dq, dr, df]).sum())
 
-    #return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
-    dif_list = [ds, dt, de, da, dy, dd, dq, dr, df]  # Replace ds, dt, de, da, dy, dd, dq, dr, df with your actual values
+    return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
 
-    my_array = np.asarray([np.float128(x.item()) if isinstance(x, np.ndarray) else np.float128(x) for x in dif_list])
-
-    return my_array
-
-
-def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type, analyze_beta = False, analyze_eta = False, analyze_tau = False):
+def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type):
     '''
     Simulator for the STEAYDQRF model using numerical integration.
     
@@ -351,13 +384,8 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
         y (array): numpy array of values of each term in STEAYDQRF.
     '''
     # grids for numerical integration
-    t_sim = np.linspace(np.min(t), np.max(t), 1000)
     t_max = np.max(t)
-    # x_sim = np.linspace(np.min(x), np.max(x), 200)
-    #
-    # # interpolate initial condition to new grid
-    # f_interpolate = interpolate.interp1d(x, IC)
-    # y0 = f_interpolate(x_sim)
+    t_sim = np.linspace(np.min(t), t_max, t_max)
 
     # indices for integration to write to file for
     for tp in t:
@@ -369,7 +397,7 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
 
     # make RHS a function of t,y
     def RHS_ty(t, y):
-        return RHS(t, y, contact_rate, quarantine_test, tau, params, t_max, chi_type, analyze_beta, analyze_eta, analyze_tau)
+        return RHS(t, y, contact_rate, quarantine_test, tau, params, t_max, chi_type)
 
     # initialize array for solution
     y = np.zeros((len(t), len(IC)))
@@ -377,8 +405,8 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
     y[0,:] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
-
     r.set_initial_value(y[0,:], t[0])  # initial values
+    
     for i in range(1, t_sim.size):
 
         # write to y for write indices
@@ -391,15 +419,6 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
         if not r.successful():
             print("integration failed")
             return 1e6 * np.ones(y.shape)
-        
-    '''
-    
-    if np.iscomplex(y).any():
-        print("Is complex!!!!!!")
-        y = np.imag(y)/h
-    '''
-    
-
 
     return y
 
@@ -482,14 +501,14 @@ def STEAYQRF_sim(RHS, IC, t, contact_rate, quarantine_test, params):
     y[0,:] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
-
     r.set_initial_value(y[0,:], t[0])  # initial values
     for i in range(1, t_sim.size):
 
         # write to y for write indices
         if np.any(i == t_sim_write_ind):
             write_count += 1
-            y[write_count, :] = r.integrate(t_sim[i])
+            if i < 183:
+                y[write_count, :] = r.integrate(t_sim[i])
         else:
             # otherwise just integrate
             r.integrate(t_sim[i])  # get one more value, add it to the array
@@ -527,7 +546,6 @@ def SEPAYRHD_sim(RHS, IC, t, contact_rate, quarantine_test):
     y[0,:] = IC
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
-
     r.set_initial_value(y[0,:], t[0])  # initial values
     for i in range(1, t_sim.size):
 

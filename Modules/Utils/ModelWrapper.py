@@ -325,7 +325,7 @@ class ModelWrapper():
                 y_pred = self.model(x)
                 
                 # save plot
-                if epoch % 200 == 0:
+                if epoch % 1000 == 0:
                     self.plot(x, y, y_pred, epoch, False)
                 val_losses = []
                 
@@ -368,7 +368,7 @@ class ModelWrapper():
                     y_pred = self.model(x_true)
 
                     # save plot
-                    if epoch % 200 == 0:
+                    if epoch % 1000 == 0:
                         self.plot(x_true, y_true, y_pred, epoch, True)
                     # compute loss 
                     self.val_loss += self.loss(y_pred, y_true)
