@@ -494,7 +494,11 @@ class AdaMaskBINNCovasim(nn.Module):
                 t_max_real, 
                 tracing_array, 
                 yita_lb=None, 
-                yita_ub=None, 
+                yita_ub=None,
+                beta_lb=None,
+                beta_ub=None,
+                tau_lb=None,
+                tau_ub=None,
                 keep_d=False, 
                 chi_type=None,
                 eta_deep=False,
@@ -508,10 +512,10 @@ class AdaMaskBINNCovasim(nn.Module):
         self.yita_loss = None
         self.yita_lb = yita_lb if yita_lb is not None else 0.0
         self.yita_ub = yita_ub if yita_ub is not None else 1.0
-        self.beta_lb = 0.0
-        self.beta_ub = 0.5
-        self.tau_lb = 0.0
-        self.tau_ub =  0.5
+        self.beta_lb = beta_lb if beta_lb is not None else 0.0
+        self.beta_ub = beta_ub if beta_ub is not None else 0.5
+        self.tau_lb = tau_lb if tau_lb is not None else 0.0
+        self.tau_ub =  tau_ub if tau_ub is not None else 0.5
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
@@ -730,7 +734,11 @@ class NNComponentsCV(nn.Module):
                 t_max_real, 
                 tracing_array, 
                 yita_lb=None, 
-                yita_ub=None, 
+                yita_ub=None,
+                beta_lb=None,
+                beta_ub=None,
+                tau_lb=None,
+                tau_ub=None,
                 keep_d=True, 
                 chi_type=None,
                 mask_input=False,
@@ -745,10 +753,10 @@ class NNComponentsCV(nn.Module):
         self.yita_loss = None
         self.yita_lb = yita_lb if yita_lb is not None else 0.0
         self.yita_ub = yita_ub if yita_ub is not None else 1.0
-        self.beta_lb = 0.0
-        self.beta_ub = 0.5
-        self.tau_lb = 0.0
-        self.tau_ub =  0.5
+        self.beta_lb = beta_lb if beta_lb is not None else 0.0
+        self.beta_ub = beta_ub if beta_ub is not None else 0.5
+        self.tau_lb = tau_lb if tau_lb is not None else 0.0
+        self.tau_ub =  tau_ub if tau_ub is not None else 0.5
         
         # store denoised data and numerically approximated derivatives
         self.u_tensor = u_tensor
