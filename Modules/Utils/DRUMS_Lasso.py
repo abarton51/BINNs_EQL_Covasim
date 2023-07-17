@@ -85,7 +85,8 @@ def DRUMS_Lasso(
     output_dict = {
         'Lasso' : lasso,
         'Equation' : equation,
-        'MSE' : mse
+        'MSE' : mse,
+        'Terms' : feature_names,
     }
     
     return output_dict
