@@ -534,7 +534,10 @@ class AdaMaskBINNCovasim(nn.Module):
         self.surface_weight = 1e2
         self.pde_weight = 1e4
         
-        self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
+        if self.masking:
+            self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000, 1])[None, :], dtype=torch.float)
+        else:
+            self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
         
         self.pde_loss_weight = 1e0
         self.eta_loss_weight = 1e5
@@ -558,7 +561,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.delta = params['delta']
         self.tracing_array = tracing_array
         self.avg_masking = params['avg_masking']
-        self.masking_coef = torch.Tensor(params['mask_coef'])
+        self.masking_coef = torch.tensor(params['mask_coef'])
 
         self.keep_d = keep_d
         self.masking = masking
@@ -599,7 +602,7 @@ class AdaMaskBINNCovasim(nn.Module):
         pde_loss = 0
         # unpack inputs
         t = inputs[:, 0][:, None]
-        
+
         # partial derivative computations
         u = outputs.clone()
 
@@ -623,13 +626,18 @@ class AdaMaskBINNCovasim(nn.Module):
         tau0 = self.tau_func(ay_tensor)
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
 
-        tyr = u[:[1,3,7]]
+        tyr_sq = torch.cat([u[:,[1,3,7]], u[:,0]**2])
         masking_ceof = self.masking_coef.to(inputs.device)
 
         # STEAYDQRF model, loop through each compartment
-        s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
-                                    u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
-                                    u[:, 8][:, None]
+        if self.masking:
+            s, tq, e, a, y, d, q, r, f, m = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
+                                        u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
+                                        u[:, 8][:, None], u[:, 9][:,None]
+        else:
+            s, tq, e, a, y, d, q, r, f = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
+                                        u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
+                                        u[:, 8][:, None]
         # (mu * Y + tau * Q)
         new_d = self.mu * y + tau * q
         for i in range(self.n_com):
@@ -665,7 +673,7 @@ class AdaMaskBINNCovasim(nn.Module):
                 RHS = self.delta * (y + d + q)
             elif i == 9:
                 # dM
-                RHS = torch.dot(tyr, masking_ceof)
+                RHS = torch.dot(tyr_sq, masking_ceof)
 
             if i in [0, 1, 2, 3, 4, 5, 6, 9]:
                 pde_loss += (LHS - RHS) ** 2
