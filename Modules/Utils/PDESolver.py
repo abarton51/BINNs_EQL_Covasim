@@ -291,7 +291,7 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
 
     return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
 
-def STEAYDQRF_RHS_dynamic_masking(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type):
+def STEAYDQRF_RHS_dynamic_md(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type):
     '''
     RHS evaluation of learned components for the STEAYDQRF model.
     
@@ -319,6 +319,8 @@ def STEAYDQRF_RHS_dynamic_masking(t, y, contact_rate, quarantine_test, tau_func,
     delta = params['delta']
     avg_masking = params['avg_masking']
     eff_ub = params['eff_ub']
+    
+    sparse_coef = params['lasso'].coef_
     
     chi = chi_func(t, chi_type)
     # get contact rates from learned MLP
@@ -362,6 +364,9 @@ def STEAYDQRF_RHS_dynamic_masking(t, y, contact_rate, quarantine_test, tau_func,
 
     # dF
     df =  delta * (y + d + q) #
+    
+    # dM
+    dM = np.dot(np.concatenate((tq, y, r, s**2, r*s), axis=1), sparse_coef)
 
     # print(np.array([ds, dt, de, da, dy, dd, dq, dr, df]).sum())
 
