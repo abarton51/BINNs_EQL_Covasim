@@ -7,7 +7,7 @@
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/reu_binn_schematic_github.png?raw=true)
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/adrums_binn_schematic.png?raw=true)
 -->
-![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/drums_binn_schematic.png?raw=true)
+![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/drums_binn_schematic_github.png?raw=true)
 
 <h2 align="center">Code Repository for Data Generation, Equation Learning, BINNs, Visualization, and Analysis</h2>
 <h3 align="center">Authors: Austin Barton, Jonathan Greer, Jordan Klein, Patrick Haughey;&emsp; Mentor: Kevin Flores</h3>
