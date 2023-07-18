@@ -479,7 +479,7 @@ class AdaMaskBINNCovasim(nn.Module):
     of diagnoses from people in quarantine (tau).
 
     Args:
-        params (dict): dictionary of parameters from COVASIM model.
+        params (dict): dictionary of parameters from Covasim model.
         t_max_real (float): the unscaled maximum time point (t).
         tracing_array (array): array values of tracing probabilities as a function of time (t).
         yita_lb (float): yita lower bound.
@@ -534,7 +534,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.surface_weight = 1e2
         self.pde_weight = 1e4
         
-        if self.masking:
+        if masking:
             self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000, 1])[None, :], dtype=torch.float)
         else:
             self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
@@ -560,8 +560,9 @@ class AdaMaskBINNCovasim(nn.Module):
         self.n_contacts = params['n_contacts']
         self.delta = params['delta']
         self.tracing_array = tracing_array
-        self.avg_masking = params['avg_masking']
-        self.masking_coef = torch.tensor(params['mask_coef'])
+        if masking:
+            self.avg_masking = params['avg_masking']
+            self.masking_coef = torch.tensor(params['mask_coef'])
 
         self.keep_d = keep_d
         self.masking = masking
@@ -609,9 +610,9 @@ class AdaMaskBINNCovasim(nn.Module):
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
         
         if self.masking:
-            avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
-            avg_masking = avg_masking[(t * self.t_max_real).long()]
-            cat_tensor = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
+            # avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
+            # avg_masking = avg_masking[(t * self.t_max_real).long()]
+            cat_tensor = torch.cat([u[:,[0,3,4,9]]], dim=1).float()
         else:
             cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float()
         eta = self.eta_mask_func(cat_tensor)
@@ -626,8 +627,9 @@ class AdaMaskBINNCovasim(nn.Module):
         tau0 = self.tau_func(ay_tensor)
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
 
-        tyr_sq = torch.cat([u[:,[1,3,7]], u[:,0]**2])
-        masking_ceof = self.masking_coef.to(inputs.device)
+        if self.masking:
+            X_mask = torch.cat([torch.ones_like(u[:,[0]]), u[:,[0,1,3,7]]], dim=1)
+            masking_coef = self.masking_coef.float().to(inputs.device)
 
         # STEAYDQRF model, loop through each compartment
         if self.masking:
@@ -673,7 +675,7 @@ class AdaMaskBINNCovasim(nn.Module):
                 RHS = self.delta * (y + d + q)
             elif i == 9:
                 # dM
-                RHS = torch.dot(tyr_sq, masking_ceof)
+                RHS = torch.matmul(X_mask, masking_coef[:,None])
 
             if i in [0, 1, 2, 3, 4, 5, 6, 9]:
                 pde_loss += (LHS - RHS) ** 2
