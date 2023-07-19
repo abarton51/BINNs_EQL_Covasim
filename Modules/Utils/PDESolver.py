@@ -372,7 +372,7 @@ def STEAYDQRF_RHS_dynamic_md(t, y, contact_rate, quarantine_test, tau_func, para
 
     return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
 
-def STEAYDQRF_RHS_dynamic_maskarr(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type):
+def STEAYDQRF_RHS_dynamic_maskarr(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type, regression=False):
     '''
     RHS evaluation of learned components for the STEAYDQRF model.
     
@@ -403,14 +403,25 @@ def STEAYDQRF_RHS_dynamic_maskarr(t, y, contact_rate, quarantine_test, tau_func,
     
     chi = chi_func(t, chi_type)
     # get contact rates from learned MLP
-    array = y[None, :][:, [0, 3, 4]].reshape(1,-1)
-    if int(t * t_max) < 183:
-        array = np.append(array,avg_masking[int(t * t_max)]).reshape(1, -1)
+    if not regression:
+        array = y[None, :][:, [0, 3, 4]].reshape(1,-1)
+        if int(t * t_max) < 183:
+            array = np.append(array,avg_masking[int(t * t_max)]).reshape(1, -1)
+        else:
+            array = np.append(array,avg_masking[-1]).reshape(1, -1)
     else:
-        array = np.append(array,avg_masking[-1]).reshape(1, -1)
+        array = y[None, :].reshape(1,-1)
+        if int(t * t_max) < 183:
+            array = np.append(array,avg_masking[int(t * t_max)]).reshape(1, -1)
+        else:
+            array = np.append(array,avg_masking[-1]).reshape(1, -1)
     cr = contact_rate(array).reshape(-1)
     yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
-    yq_array = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
+    
+    if not regression:
+        yq_array = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
+    else:
+        yq_array = y[None, :].reshape(1, -1)
     beta0 = quarantine_test(yq_array).reshape(-1)
     beta = chi * beta0
     
