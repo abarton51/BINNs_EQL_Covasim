@@ -407,7 +407,7 @@ def STEAYDQRF_RHS_dynamic_maskarr(t, y, contact_rate, quarantine_test, tau_func,
     if int(t * t_max) < 183:
         array = np.append(array,avg_masking[int(t * t_max)]).reshape(1, -1)
     else:
-        array = np.append(array,avg_masking[182]).reshape(1, -1)
+        array = np.append(array,avg_masking[-1]).reshape(1, -1)
     cr = contact_rate(array).reshape(-1)
     yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
     yq_array = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
@@ -469,7 +469,7 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
     '''
     # grids for numerical integration
     t_max = np.max(t)
-    t_sim = np.linspace(np.min(t), t_max, t_max)
+    t_sim = np.linspace(np.min(t), t_max, 1000)
 
     # indices for integration to write to file for
     for tp in t:
