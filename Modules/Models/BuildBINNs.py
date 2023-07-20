@@ -9,6 +9,8 @@ from Modules.Models.BuildMLP import BuildMLP
 from Modules.Activations.SoftplusReLU import SoftplusReLU
 from Modules.Utils.Gradient import Gradient
 
+from sklearn.preprocessing import PolynomialFeatures
+
 from scipy.stats import beta
 
 #--------------------------------Original COVASIM_BINN by Xin Li--------------------------------#
@@ -848,8 +850,9 @@ class AdaMaskBINNCovasim(nn.Module):
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
 
         if self.masking:
-            X_mask = torch.cat([torch.ones_like(u[:,[0]]), u[:,[0,1,3,7]]], dim=1)
-            masking_coef = self.masking_coef.float().to(inputs.device)
+            poly = PolynomialFeatures(2)
+            X_mt = torch.tensor(poly.fit_transform(u[:,0:9].detach().cpu())).float().to(inputs.device)
+            masking_coef = self.masking_coef.float().to(inputs.device)[:,None]
 
         # STEAYDQRF model, loop through each compartment
         if self.masking:
@@ -895,7 +898,7 @@ class AdaMaskBINNCovasim(nn.Module):
                 RHS = self.delta * (y + d + q)
             elif i == 9:
                 # dM
-                RHS = torch.matmul(X_mask, masking_coef[:,None])
+                RHS = torch.matmul(X_mt, masking_coef)
 
             if i in [0, 1, 2, 3, 4, 5, 6, 9]:
                 pde_loss += (LHS - RHS) ** 2
