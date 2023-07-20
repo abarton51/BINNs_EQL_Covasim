@@ -695,20 +695,31 @@ class AdaMaskBINNCovasim_arr(nn.Module):
 #--------------------------------Adaptive Masking---------------------------------------------------------#
 class AdaMaskBINNCovasim(nn.Module):
     '''
-    Constructs a biologically-informed neural network (BINN) for the Covasim model with 
-    an adaptive masking behavior that is composed of the average number of contacts sufficient 
-    to transmit infection per unit of time (eta), the effective tracing rate (beta), and the rate 
-    of diagnoses from people in quarantine (tau).
+    Constructs a biologically-informed neural network (BINN) for the Covasim model. Includes 
+    an adaptive masking behavior that is either learned by the network are given to the model
+    as observed data. The BINN is composed of the solution approximating neural network that takes
+    as an input time and outputs the compartments of the model. The parameter networks are the average 
+    number of contacts sufficient to transmit infection per unit of time (eta or contact rate), 
+    the effective tracing rate (beta), and the rate of diagnosis from people infected and quarantined 
+    (tau).
 
     Args:
-        params (dict): dictionary of parameters from Covasim model.
+        params (dict): dictionary of parameters from Covasim model. Must include average masking data if 
+            masking==True.
         t_max_real (float): the unscaled maximum time point (t).
         tracing_array (array): array values of tracing probabilities as a function of time (t).
-        yita_lb (float): yita lower bound.
-        yita_ub (float): yita upper bound.
-        keep_d (bool): If true, then include D (diagnosed) in model, otherwise exlcude it.
+        yita_lb (float): contact rate lower bound.
+        yita_ub (float): contact rate upper bound.
+        beta_lb (float): tracing rate lower bound.
+        beta_ub (float): tracing rate upper bound.
+        tau_lb (float): q. diagnosis rate lower bound.
+        tau_ub (float): q. diagnosis rate upper bound.
         chi_type (func): real-valued function of function that affects the quarantining rate.
-
+        eta_deep (bool): If True make contact rate network 3 layers deep. Otherwise, 1 layer deep.
+        beta_deep (bool): If True make tracing rate network 3 layers deep. Otherwise, 1 layer deep.
+        tau_deep (bool): If True make q. diagnosis rate network 3 layers deep. Otherwise, 1 layer deep.
+        masking (bool): If True, include average masking in the model.
+        masking_learned (bool): If True, masking averages are learned.
     '''
 
     def __init__(self, 
@@ -720,17 +731,19 @@ class AdaMaskBINNCovasim(nn.Module):
                 beta_lb=None,
                 beta_ub=None,
                 tau_lb=None,
-                tau_ub=None,
-                keep_d=False, 
+                tau_ub=None, 
                 chi_type=None,
                 eta_deep=False,
                 beta_deep=False,
                 tau_deep=False,
-                masking=False):
+                maskb=False,
+                masking_learned=False):
 
         super().__init__()
+        
+        if not maskb and masking_learned: raise Exception("Can not learn masking if masking is not included in the model.")
 
-        self.n_com = 9 if not masking else 10
+        self.n_com = 9 if not masking_learned else 10
         # surface fitter
         self.yita_loss = None
         self.yita_lb = yita_lb if yita_lb is not None else 0.0
@@ -742,7 +755,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.surface_fitter = main_MLP(self.n_com)
 
         # pde functions/components
-        self.eta_mask_func = eta_NN(3, eta_deep) if not masking else eta_NN(4, eta_deep)
+        self.eta_func = eta_NN(3, eta_deep) if not maskb else eta_NN(4, eta_deep)
         self.beta_func = beta_NN(beta_deep)
         self.tau_func = tau_NN(tau_deep)
 
@@ -756,7 +769,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.surface_weight = 1e2
         self.pde_weight = 1e4
         
-        if masking:
+        if masking_learned:
             self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000, 1])[None, :], dtype=torch.float)
         else:
             self.weights_c = torch.tensor(np.array([1, 1000, 1, 1000, 1000, 1, 1000, 1, 1000])[None, :], dtype=torch.float)
@@ -782,12 +795,13 @@ class AdaMaskBINNCovasim(nn.Module):
         self.n_contacts = params['n_contacts']
         self.delta = params['delta']
         self.tracing_array = tracing_array
-        if masking:
+        
+        if maskb and not masking_learned:
             self.avg_masking = params['avg_masking']
-            self.masking_coef = torch.tensor(params['mask_coef'])
-
-        self.keep_d = keep_d
-        self.masking = masking
+        elif maskb and masking_learned:
+            self.masking_coef = torch.tensor(params['mt_coef'])
+        self.maskb = maskb
+        self.masking_learned = masking_learned
 
         # if dynamic
         if 'dynamic_tracing' in params:
@@ -798,14 +812,14 @@ class AdaMaskBINNCovasim(nn.Module):
 
 
     def forward(self, inputs):
-
+        '''Forward Pass of Neural Network'''
         # cache input batch for pde loss
         self.inputs = inputs
 
         return self.surface_fitter(self.inputs)
 
     def gls_loss(self, pred, true):
-
+        '''GLS Loss Function'''
         residual = (pred - true) ** 2
 
         # add weight to initial condition
@@ -822,6 +836,7 @@ class AdaMaskBINNCovasim(nn.Module):
         return torch.mean(residual)
 
     def pde_loss(self, inputs, outputs, return_mean=True):
+        '''PDE Loss Function'''
         pde_loss = 0
         # unpack inputs
         t = inputs[:, 0][:, None]
@@ -831,31 +846,34 @@ class AdaMaskBINNCovasim(nn.Module):
 
         chi_t = chi(1 + t * self.t_max_real, self.eff_ub, self.chi_type)
         
-        if self.masking:
-            # avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
-            # avg_masking = avg_masking[(t * self.t_max_real).long()]
-            cat_tensor = torch.cat([u[:,[0,3,4,9]]], dim=1).float()
+        if self.maskb:
+            if self.masking_learned:
+                eta_input = torch.cat([u[:,[0,3,4,9]]], dim=1).float()
+            else:
+                avg_masking = torch.tensor(self.avg_masking, dtype=torch.float).to(inputs.device)
+                avg_masking = avg_masking[(t * self.t_max_real).long()]
+                eta_input = torch.cat([u[:,[0,3,4]], avg_masking], dim=1).float()
         else:
-            cat_tensor = torch.cat([u[:,[0,3,4]]], dim=1).float()
-        eta = self.eta_mask_func(cat_tensor)
+            eta_input = torch.cat([u[:,[0,3,4]]], dim=1).float()
+        eta = self.eta_func(eta_input)
         yita = self.yita_lb + (self.yita_ub - self.yita_lb) * eta[:, 0][:, None]
 
-        yq_tensor = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1)
-        beta0 = self.beta_func(yq_tensor)
+        beta_input = torch.cat([u[:,[0,3,4]].sum(dim=1, keepdim=True), chi_t], dim=1)
+        beta0 = self.beta_func(beta_input)
         # beta = self.beta_lb + (self.beta_ub - self.beta_lb) * beta0
-        beta = chi_t * beta0
+        beta = chi_t * beta0 # beta = chi(t) * beta(S+A+Y, chi(t))
 
-        ay_tensor = u[:,[3,4]]
-        tau0 = self.tau_func(ay_tensor)
+        tau_input = u[:,[3,4]]
+        tau0 = self.tau_func(tau_input)
         tau = self.tau_lb + (self.tau_ub - self.tau_lb) * tau0
 
-        if self.masking:
+        if self.masking_learned:
             poly = PolynomialFeatures(2)
             X_mt = torch.tensor(poly.fit_transform(u[:,0:9].detach().cpu())).float().to(inputs.device)
             masking_coef = self.masking_coef.float().to(inputs.device)[:,None]
 
         # STEAYDQRF model, loop through each compartment
-        if self.masking:
+        if self.masking_learned:
             s, tq, e, a, y, d, q, r, f, m = u[:, 0][:, None], u[:, 1][:, None], u[:, 2][:, None], u[:, 3][:, None],\
                                         u[:, 4][:, None], u[:, 5][:, None], u[:, 6][:, None], u[:, 7][:, None],\
                                         u[:, 8][:, None], u[:, 9][:,None]
@@ -907,7 +925,7 @@ class AdaMaskBINNCovasim(nn.Module):
 
         # constraints on contact_rate function
         yita_final = yita * (a + y)
-        deta = Gradient(yita_final, cat_tensor, order=1)
+        deta = Gradient(yita_final, eta_input, order=1)
         self.eta_a_loss = 0
         self.eta_a_loss += self.eta_loss_weight * torch.where(deta[:,1] < 0, deta[:,1] ** 2, torch.zeros_like(deta[:,1]))
 
@@ -915,7 +933,7 @@ class AdaMaskBINNCovasim(nn.Module):
         self.eta_y_loss += self.eta_loss_weight * torch.where(deta[:,2] < 0, deta[:,2] ** 2, torch.zeros_like(deta[:,2]))
 
         # constraint on tau function
-        dtau = Gradient(tau, ay_tensor, order=1)
+        dtau = Gradient(tau, tau_input, order=1)
         self.tau_a_loss = 0
         self.tau_a_loss += self.tau_loss_weight * torch.where(dtau[:,0] < 0, dtau[:,0] ** 2, torch.zeros_like(dtau[:,0]))
 
@@ -928,7 +946,7 @@ class AdaMaskBINNCovasim(nn.Module):
             return pde_loss
 
     def loss(self, pred, true):
-
+        '''Loss Function = a*L_GLS + b*L_PDE'''
         self.gls_loss_val = 0
         self.pde_loss_val = 0
 

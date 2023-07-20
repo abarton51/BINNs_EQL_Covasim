@@ -454,7 +454,7 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
 
     return np.array([ds, dt, de, da, dy, dd, dq, dr, df, dM])
 
-def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type):
+def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type, regression=False):
     '''
     Simulator for the STEAYDQRF model using numerical integration.
     
@@ -466,6 +466,7 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
         tau_func (func): the quarantine diagnoses rate learned MLP in the BINN model.
         params (dict):
         chi_type (str): string indicating the type of function chi is.
+        regression (bool): boolean indicating if the parameters are NN are linear models.
     
     Returns:
         y (array): numpy array of values of each term in STEAYDQRF.
@@ -484,7 +485,7 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
 
     # make RHS a function of t,y
     def RHS_ty(t, y):
-        return RHS(t, y, contact_rate, quarantine_test, tau, params, t_max, chi_type)
+        return RHS(t, y, contact_rate, quarantine_test, tau, params, t_max, chi_type, regression)
 
     # initialize array for solution
     y = np.zeros((len(t), len(IC)))
