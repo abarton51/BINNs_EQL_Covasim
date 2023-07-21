@@ -344,7 +344,10 @@ def STEAYDQRF_RHS_dynamic_maskarr(t, y, contact_rate, quarantine_test, tau_func,
     beta0 = quarantine_test(yq_array).reshape(-1)
     beta = chi * beta0
     
-    ay_array = y[None, :][:, [3, 4]].reshape(1,-1)
+    if not regression:
+        ay_array = y[None, :][:, [3, 4]].reshape(1,-1)
+    else:
+        ay_array = y[None, :].reshape(1, -1)
     tau0 = tau_func(ay_array)
     tau = params['tau_lb'] + (params['tau_ub'] - params['tau_lb']) * tau0
     # current compartment values
