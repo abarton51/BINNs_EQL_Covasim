@@ -64,7 +64,7 @@ class demographic_masking(cv.Intervention):
   def initialize(self,sim):
     super().initialize()
     ppl             = sim.people # shorten sim.people
-    self.pop        = len(ppl) # record population size
+    self.pop        = len(ppl)
     self.child      = np.logical_and(ppl.age > 2, ppl.age <= 9) # set children as agents aged 2 to 9
     self.adolescent = np.logical_and(ppl.age > 9, ppl.age <= 19) # set adolescent as agents aged 10 to 19
     self.adult      = np.logical_and(ppl.age > 19, ppl.age <= 69) # set adult as agents aged 20 to 69
@@ -75,126 +75,51 @@ class demographic_masking(cv.Intervention):
     return
 
   def apply(self,sim):
-    ppl                = sim.people
-    self.uids          = ppl.uid
-    ppl.rel_sus        = ppl.rel_sus # reset all agents relative susceptibility 
-    self.num_dead      = ppl.dead.sum() # record number of agents dead at timestep t
-    self.num_diagnosed = (ppl.diagnosed & ppl.infectious).sum() # record number of agents diagnosed at timestep t
-    self.x             = self.num_dead + self.num_diagnosed # set x equal to number of agents diagnosed and dead
-    self.norm          = norm.rvs(loc=self.mean,scale=self.std,size=self.pop) # set normal distrubution array of values for beta1 in logit function
-    self.norm_f        = norm.rvs(loc=1.14,scale=0.15,size=self.pop) # set normal distribution array of values for masking probability multiplier for female agents
+    ppl                          = sim.people
+    ppl.rel_sus[self.child]      = 0.34
+    ppl.rel_sus[self.adolescent] = 0.67
+    ppl.rel_sus[self.adult]      = 1.00
+    ppl.rel_sus[self.senior]     = 1.24
+    ppl.rel_sus[self.supsenior]  = 1.47
     
-    self.contacts_h      = ppl.contacts[0][0]
-    self.counter_h       = Counter(self.contacts_h)
-    self.contacts_h_dict = OrderedDict((val,self.counter_h.get(val,0)) for val in self.uids)
+    num_dead      = ppl.dead.sum() # record number of agents dead at timestep t
+    num_diagnosed = (ppl.diagnosed & ppl.infectious).sum() # record number of agents diagnosed at timestep t
+    self.x        = num_dead + num_diagnosed # set x equal to number of agents diagnosed and dead
+    self.norm     = norm.rvs(loc=self.mean,scale=self.std,size=self.pop) # set normal distrubution array of values for beta1 in logit function
+    self.norm_f   = norm.rvs(loc=1.14,scale=0.15,size=self.pop) # set normal distribution array of values for masking probability multiplier for female agents
 
-    self.contacts_s      = ppl.contacts[1][0]
-    self.counter_s       = Counter(self.contacts_s)
-    self.contacts_s_dict = OrderedDict((val,self.counter_s.get(val,0)) for val in self.uids)
+    uids = np.array(sim.people.uid)
 
-    self.contacts_w      = ppl.contacts[2][0]
-    self.counter_w       = Counter(self.contacts_w)
-    self.contacts_w_dict = OrderedDict((val,self.counter_w.get(val,0)) for val in self.uids)
+    sexs = np.array(sim.people.sex)
+    sexs = np.array(self.male,1,sexs)
+    sexs = np.where(self.female,self.norm_f,sexs)
 
-    self.contacts_c      = ppl.contacts[3][0]
-    self.counter_c       = Counter(self.contacts_c)
-    self.contacts_c_dict = OrderedDict((val,self.counter_c.get(val,0))for val in self.uids)
+    ages = np.array(sim.people.age)
+    ages = np.where(self.child,0.34,ages)
+    ages = np.where(self.adolescent,0.67,ages)
+    ages = np.where(self.adult,1.00,ages)
+    ages = np.where(self.senior,1.24,ages)
+    ages = np.where(self.supsenior,1.47,ages)
 
-    self.total_contacts_dict  = {key:self.contacts_h_dict[key]+self.contacts_s_dict[key]+self.contacts_w_dict[key]+self.contacts_c_dict[key] for key in self.uids}
-    self.total_contacts_array = np.array(list(self.total_contacts_dict.values()))
-    self.y                    = self.total_contacts_array
-    
-# Masking Children
-    self.p_child       = np.exp((0.0001*self.y)+((self.norm*0.34)*(self.x/self.pop))-0.001*sim.t) 
-    self.p_child       = (self.p_child/(1+self.p_child))-0.5 # create logit function
-    self.p_child       = np.clip(self.p_child,self.maskprob_lb,self.maskprob_ub) # include bounds on logit function
-    bernoulli_dist     = bernoulli(p=self.p_child) 
-    self.child_masking = bernoulli_dist.rvs(size=len(self.p_child)) # perform bernoulli using probability of masking for male children
-    ppl.rel_sus        = np.where(self.child_masking & self.child & self.male,0.34*self.mask_eff,ppl.rel_sus) # change relative susceptibility values for male children that are masking
+    contacts_h = np.bincount(ppl.contacts[0][0])
+    h_array    = np.pad(contacts_h,(0,len(uids)-len(contacts_h)),mode='constant')
+    contacts_s = np.bincount(ppl.contacts[1][0])
+    s_array    = np.pad(contacts_s,(0,len(uids)-len(contacts_s)),mode='constant')
+    contacts_w = np.bincount(ppl.contacts[2][0])
+    w_array    = np.pad(contacts_w,(0,len(uids)-len(contacts_w)),mode='constant')
+    contacts_c = np.bincount(ppl.contacts[3][0])
+    c_array    = np.pad(contacts_c,(0,len(uids)-len(contacts_c)),mode='constant')
+    contacts   = h_array + s_array + w_array + c_array
 
-    self.p_child_f       = np.exp((0.0001*self.y)+((self.norm*0.34)*(self.x/self.pop))-0.001*sim.t)
-    self.p_child_f       = self.norm_f*(self.p_child_f/(1+self.p_child_f))-0.5
-    self.p_child_f       = np.clip(self.p_child_f,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist       = bernoulli(p=self.p_child_f)
-    self.child_masking_f = bernoulli_dist.rvs(size=len(self.p_child_f))
-    ppl.rel_sus          = np.where(self.child_masking_f & self.child & self.female,0.34*self.mask_eff,ppl.rel_sus) # change relative susceptibility values for female children that are masking
+    p = np.exp((0.0001*contacts)+(self.norm*ages)*(self.x/self.pop)-(0.05*sim.t))
+    p = sexs*(p/1+p)-0.5
+    p = np.clip(p,self.maskprob_lb,self.maskprob_ub)
 
-# Masking Adolescents
-    self.p_adolescent        = np.exp((0.0001*self.y)+((self.norm*0.67)*(self.x/self.pop))-0.001*sim.t)
-    self.p_adolescent        = (self.p_adolescent/(1+self.p_adolescent))-0.5
-    self.p_adolescent        = np.clip(self.p_adolescent,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist           = bernoulli(p=self.p_adolescent)
-    self.adolescent_masking  = bernoulli_dist.rvs(size=len(self.p_adolescent))
-    ppl.rel_sus              = np.where(self.adolescent_masking & self.adolescent & self.male,0.67*self.mask_eff,ppl.rel_sus)
-
-    self.p_adolescent_f       = np.exp((0.0001*self.y)+((self.norm*0.67)*(self.x/self.pop))-0.001*sim.t)
-    self.p_adolescent_f       = self.norm_f*(self.p_adolescent_f/(1+self.p_adolescent_f))-0.5
-    self.p_adolescent_f       = np.clip(self.p_adolescent_f,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist            = bernoulli(p=self.p_adolescent_f)
-    self.adolescent_masking_f  = bernoulli_dist.rvs(size=len(self.p_adolescent_f))
-    ppl.rel_sus               = np.where(self.adolescent_masking_f & self.adolescent & self.female,0.67*self.mask_eff,ppl.rel_sus)
-
-
-# Masking Adults
-    self.p_adult        = np.exp((0.0001*self.y)+((self.norm)*(self.x/self.pop))-0.001*sim.t)
-    self.p_adult        = (self.p_adult/(1+self.p_adult))-0.5
-    self.p_adult        = np.clip(self.p_adult,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist      = bernoulli(p=self.p_adult)
-    self.adult_masking  = bernoulli_dist.rvs(size=len(self.p_adult))
-    ppl.rel_sus         = np.where(self.adult_masking & self.adult & self.male,1.00*self.mask_eff,ppl.rel_sus)
-  
-
-    self.p_adult_f       = np.exp((0.0001*self.y)+((self.norm)*(self.x/self.pop))-0.001*sim.t)
-    self.p_adult_f       = self.norm_f*(self.p_adult_f/(1+self.p_adult_f))-0.5
-    self.p_adult_f       = np.clip(self.p_adult_f,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist      = bernoulli(p=self.p_adult_f)
-    self.adult_masking_f  = bernoulli_dist.rvs(size=len(self.p_adult_f))
-    ppl.rel_sus          = np.where(self.adult_masking & self.adult & self.female,1.00*self.mask_eff,ppl.rel_sus)
-    
-# Masking Seniors
-    self.p_senior       = np.exp((0.0001*self.y)+((self.norm*1.24)*(self.x/self.pop))-0.001*sim.t)
-    self.p_senior       = (self.p_senior/(1+self.p_senior))-0.5
-    self.p_senior       = np.clip(self.p_senior,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist      = bernoulli(p=self.p_senior)
-    self.senior_masking  = bernoulli_dist.rvs(size=len(self.p_senior))
-    ppl.rel_sus         = np.where(self.senior_masking & self.senior,1.24*self.mask_eff,ppl.rel_sus)
-  
-
-    self.p_senior_f       = np.exp((0.0001*self.y)+((self.norm*1.24)*(self.x/self.pop))-0.001*sim.t)
-    self.p_senior_f       = self.norm_f*(self.p_senior_f/(1+self.p_senior_f))-0.5
-    self.p_senior_f       = np.clip(self.p_senior_f,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist        = bernoulli(p=self.p_senior_f)
-    self.senior_masking_f = bernoulli_dist.rvs(size=len(self.p_senior_f))
-    ppl.rel_sus           = np.where(self.senior_masking_f & self.senior,1.24*self.mask_eff,ppl.rel_sus)
-
-
-
-# Masking Superseniors    
-    self.p_supsenior       = np.exp((0.0001*self.y)+((self.norm*1.47)*(self.x/self.pop))-0.001*sim.t)
-    self.p_supsenior       = (self.p_supsenior/(1+self.p_supsenior))-0.5
-    self.p_supsenior       = np.clip(self.p_supsenior,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist         = bernoulli(p=self.p_supsenior)
-    self.supsenior_masking = bernoulli_dist.rvs(size=len(self.p_supsenior))   
-    ppl.rel_sus            = np.where(self.supsenior_masking & self.supsenior & self.male,1.47*self.mask_eff,ppl.rel_sus)
-   
-
-    self.p_supsenior_f       = np.exp((0.0001*self.y)+((self.norm*1.47)*(self.x/self.pop))-0.001*sim.t)
-    self.p_supsenior_f       = self.norm_f*(self.p_supsenior_f/(1+self.p_supsenior_f))-0.5
-    self.p_supsenior_f       = np.clip(self.p_supsenior_f,self.maskprob_lb,self.maskprob_ub)
-    bernoulli_dist           = bernoulli(p=self.p_supsenior_f)
-    self.supsenior_masking_f = bernoulli_dist.rvs(size=len(self.p_supsenior_f))
-    ppl.rel_sus              = np.where(self.supsenior_masking_f & self.supsenior & self.female,1.47*self.mask_eff,ppl.rel_sus)
-    
-  
-
+    masking = bernoulli.rvs(p=p,size=len(p))
     global num_masking
+    num_masking = np.sum(masking)
 
-    num_masking = len(set(np.where(self.child_masking | self.child_masking_f)[0]) |       # count total number of agents masking at timestep t
-                       set(np.where(self.adolescent_masking | self.adolescent_masking_f)[0]) |
-                       set(np.where(self.adult_masking | self.adult_masking_f)[0]) |
-                       set(np.where(self.senior_masking | self.senior_masking_f)[0]) |
-                       set(np.where(self.supsenior_masking | self.supsenior_masking_f)[0]))
-    
+    ppl.rel_sus = np.where(masking,self.mask_eff*ppl.rel_sus,ppl.rel_sus)
     return
 
 
