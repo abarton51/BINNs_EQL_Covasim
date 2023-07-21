@@ -278,10 +278,10 @@ class AdaMaskBINNCovasim(nn.Module):
         self.delta = params['delta']
         self.tracing_array = tracing_array
         
-        if maskb and not masking_learned:
+        if maskb:
             self.avg_masking = params['avg_masking']
-        elif maskb and masking_learned:
-            self.masking_coef = torch.tensor(params['mt_coef'])
+            if masking_learned:
+                self.masking_coef = torch.tensor(params['mt_coef'])
         self.maskb = maskb
         self.masking_learned = masking_learned
 
