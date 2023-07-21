@@ -281,7 +281,7 @@ class AdaMaskBINNCovasim(nn.Module):
         if maskb:
             self.avg_masking = params['avg_masking']
             if masking_learned:
-                self.masking_coef = torch.tensor(params['mt_coef'])
+                self.mt_coef = torch.tensor(params['mt_coef'])
         self.maskb = maskb
         self.masking_learned = masking_learned
 
@@ -352,7 +352,7 @@ class AdaMaskBINNCovasim(nn.Module):
         if self.masking_learned:
             poly = PolynomialFeatures(2)
             X_mt = torch.tensor(poly.fit_transform(u[:,0:9].detach().cpu())).float().to(inputs.device)
-            masking_coef = self.masking_coef.float().to(inputs.device)[:,None]
+            mt_coef = self.mt_coef.float().to(inputs.device)[:,None]
 
         # STEAYDQRF model, loop through each compartment
         if self.masking_learned:
@@ -398,7 +398,7 @@ class AdaMaskBINNCovasim(nn.Module):
                 RHS = self.delta * (y + d + q)
             elif i == 9:
                 # dM
-                RHS = torch.matmul(X_mt, masking_coef)
+                RHS = torch.matmul(X_mt, mt_coef)
 
             if i in [0, 1, 2, 3, 4, 5, 6, 9]:
                 pde_loss += (LHS - RHS) ** 2
