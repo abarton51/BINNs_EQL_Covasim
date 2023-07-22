@@ -382,7 +382,7 @@ def STEAYDQRF_RHS_dynamic_maskarr(t, y, contact_rate, quarantine_test, tau_func,
 
     return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
 
-def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type):
+def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params, t_max, chi_type, regression=False):
     '''
     RHS evaluation of learned components for the STEAYDQRF model.
     
@@ -412,15 +412,25 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
     eff_ub = params['eff_ub']
     chi = chi_func(t, chi_type)
     # get contact rates from learned MLP
-    array = y[None, :][:, [0, 3, 4]].reshape(1,-1) # , chi
-    cr = contact_rate(array).reshape(-1)
-    yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
-    yq_array = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
-    beta0 = quarantine_test(yq_array).reshape(-1)
+    if not regression:
+        eta_input = y[None, :][:, [0, 3, 4]].reshape(1,-1) # , chi
+    else:
+        eta_input = y[None, :].reshape(1,-1)
+    eta = contact_rate(eta_input).reshape(-1)
+    yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * eta[0]
+    
+    if not regression:
+        beta_input = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
+    else:
+        beta_input = y[None, :].reshape(1, -1)
+    beta0 = quarantine_test(beta_input).reshape(-1)
     beta = chi * beta0
     
-    ay_array = y[None, :][:, [3, 4]].reshape(1,-1)
-    tau0 = tau_func(ay_array)
+    if not regression:
+        tau_input = y[None, :][:, [3, 4]].reshape(1,-1)
+    else:
+        tau_input = y[None, :].reshape(1, -1)
+    tau0 = tau_func(tau_input)
     tau = params['tau_lb'] + (params['tau_ub'] - params['tau_lb']) * tau0
     # current compartment values
     s, tq, e, a, y, d, q, r, f = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7], y[8]
@@ -451,11 +461,8 @@ def STEAYDQRF_RHS_dynamic(t, y, contact_rate, quarantine_test, tau_func, params,
 
     # dF
     df =  delta * (y + d + q) #
-    
-    # dM
-    dM = None
 
-    return np.array([ds, dt, de, da, dy, dd, dq, dr, df, dM])
+    return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
 
 def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_type, regression=False):
     '''
@@ -494,6 +501,7 @@ def STEAYDQRF_sim(RHS, IC, t, contact_rate, quarantine_test, tau, params, chi_ty
     y = np.zeros((len(t), len(IC)))
 
     y[0,:] = IC
+    
     write_count = 0
     r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
     r.set_initial_value(y[0,:], t[0])  # initial values
