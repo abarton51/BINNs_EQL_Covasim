@@ -2,7 +2,7 @@
 ## python environment install with conda
 ```
 # create new environment from file
-conda create -n "myenv" --file requirements.txt python=3.9.0
+conda create -n "myenv" --file requirements.txt python>=3.9.0
 # install sciris
 pip install sciris
 # install pytorch
