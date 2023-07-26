@@ -59,7 +59,7 @@ def DRUMS_Lasso(
     # Create a Lasso object and fit the data
     lasso = LassoCV(fit_intercept=intercept, cv=cv, alphas=alphas)
     lasso.fit(X_poly, lhs_values)
-    
+
     # Get the coefficients and feature names
     coefs = lasso.coef_
     intercept = lasso.intercept_

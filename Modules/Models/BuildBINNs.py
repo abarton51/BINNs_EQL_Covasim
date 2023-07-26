@@ -13,7 +13,6 @@ from sklearn.preprocessing import PolynomialFeatures
 
 from scipy.stats import beta
 
-#--------------------------------Original COVASIM_BINN by Xin Li--------------------------------#
 class main_MLP(nn.Module):
     '''
     Construct MLP surrogate model for the solution of the governing ODE system.
@@ -448,7 +447,9 @@ class AdaMaskBINNCovasim(nn.Module):
 
         return self.gls_loss_val + self.pde_loss_val
     
-#------------------------------------Covasim BINN with optional Adaptive Masking-----------------------------------------------------#
+#------------------------------------------Covasim BINN with optional Adaptive Masking-----------------------------------------------#
+#------------------------------------------------------------------------------------------------------------------------------------#
+#------------------------------------------------------WORK IN PROGRESS--------------------------------------------------------------#
 #------------------------------------------------------------------------------------------------------------------------------------#
 class NNComponentsCV_DRUMS(nn.Module):
     '''
@@ -678,8 +679,8 @@ class NNComponentsCV_DRUMS(nn.Module):
 
         return self.pde_loss_val
 #------------------------------------------------------------------------------------------------------------------------------------#
-#-------------------------------------Bypassing Solution Approximator----------------------------------------------------------------#
-#-------------------------------------Bypassing Solution Approximator----------------------------------------------------------------#
+#-------------------------------------------------Bypassing Solution Approximator----------------------------------------------------#
+#-------------------------------------------------Bypassing Solution Approximator----------------------------------------------------#
 class NNComponentsCV(nn.Module):
     '''
     Constructs a neural network that takes in denoised data and numerically approximated derivatives and
@@ -908,4 +909,4 @@ class NNComponentsCV(nn.Module):
 
         return self.pde_loss_val
 #------------------------------------------------------------------------------------------------------------------------------------#
-#-------------------------------------Bypassing Solution Approximator----------------------------------------------------------------#
+#-------------------------------------------------Bypassing Solution Approximator----------------------------------------------------#

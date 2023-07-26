@@ -362,9 +362,9 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         if masking==1:
             mk = demographic_masking(mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00,mean=100,std=50)
         elif masking==2:
-            mk = uniform_masking(model_params,mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00)
+            mk = uniform_masking(model_params, mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00)
         elif masking==3:
-            mk = norm_random_masking(model_params,mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00,mean=75,std=50)
+            mk = norm_random_masking(model_params, mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00,mean=75,std=50)
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
