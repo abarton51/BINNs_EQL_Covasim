@@ -51,7 +51,7 @@ def chi_func(t, chi_type):
     return factor
 
 def STEAYDQRF_RHS_dynamic_DRUMS(t, 
-                                y, 
+                                u, 
                                 eta_func, 
                                 beta_func, 
                                 tau_func, 
@@ -95,7 +95,7 @@ def STEAYDQRF_RHS_dynamic_DRUMS(t,
     
     chi = chi_func(t, chi_type)
     # eta
-    eta_input = y[None, :][:, [0, 3, 4]].reshape(1,-1) if not eta_all_comps else y[None, :].reshape(1,-1)
+    eta_input = u[None, :][:, [0, 3, 4]].reshape(1,-1) if not eta_all_comps else u[None, :].reshape(1,-1)
     if masking:
         if int(t * t_max) < 183:
             eta_input = np.append(eta_input, avg_masking[int(t * t_max)]).reshape(1, -1)
@@ -108,12 +108,13 @@ def STEAYDQRF_RHS_dynamic_DRUMS(t,
         eta_input = poly.fit_transform(eta_input)
         cr = eta_func(eta_input).reshape(-1)
     yita = params['yita_lb'] + (params['yita_ub'] - params['yita_lb']) * cr[0]
+    yita = yita if yita.shape == (1,) else np.array([yita])
     
     # beta
     if not beta_all_comps:
-        beta_input = np.append(y[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
+        beta_input = np.append(u[None, :][:,[0, 3, 4]].sum(axis=1, keepdims=True), chi).reshape(1,-1)
     else:
-        beta_input = y[None, :].reshape(1, -1)
+        beta_input = u[None, :].reshape(1, -1)
     if beta_degree==-1:
         beta0 = beta_func(beta_input).reshape(-1)
     else:
@@ -123,7 +124,7 @@ def STEAYDQRF_RHS_dynamic_DRUMS(t,
     beta = chi * beta0
     
     # tau
-    tau_input = y[None, :][:, [3, 4]].reshape(1,-1) if not tau_all_comps else y[None, :].reshape(1,-1)
+    tau_input = u[None, :][:, [3, 4]].reshape(1,-1) if not tau_all_comps else u[None, :].reshape(1,-1)
     if tau_degree==-1:
         tau0 = tau_func(tau_input)
     else:
@@ -133,7 +134,7 @@ def STEAYDQRF_RHS_dynamic_DRUMS(t,
     tau = params['tau_lb'] + (params['tau_ub'] - params['tau_lb']) * tau0
     
     # current compartment values
-    s, tq, e, a, y, d, q, r, f = y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7], y[8]
+    s, tq, e, a, y, d, q, r, f = u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], u[8]
     new_d = mu * y +  tau * q
     # dS
     ds = - yita * s * (a + y) - beta * new_d *  n_contacts * s + alpha * tq
@@ -143,6 +144,7 @@ def STEAYDQRF_RHS_dynamic_DRUMS(t,
 
     # dE
     de = yita * s * (a + y) - gamma * e
+    de = de if de.shape == ds.shape else de.reshape(1, -1)
 
     # dA
     da =  p_asymp * gamma * e - lamda * a - beta * new_d *  n_contacts * a
@@ -158,11 +160,14 @@ def STEAYDQRF_RHS_dynamic_DRUMS(t,
 
     # dR
     dr =  lamda * (a + y + d ) #
+    dr = dr if dr.shape == ds.shape else np.array([dr]).reshape(1, -1)
 
     # dF
-    df =  delta * (y + d + q) #
+    df =  delta * (y + d + q)
+    df = df if df.shape == ds.shape else np.array([df]).reshape(1, -1)
 
     return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
+
 
 def STEAYDQRF_sim(RHS, 
                   IC, 
@@ -208,9 +213,9 @@ def STEAYDQRF_sim(RHS,
             t_sim_write_ind = np.hstack((t_sim_write_ind, tp_ind))
 
     # make RHS a function of t,y
-    def RHS_ty(t, y):
+    def RHS_tu(t, u):
         return RHS(t, 
-                   y, 
+                   u, 
                    eta_func, 
                    beta_func, 
                    tau_func, 
@@ -226,25 +231,25 @@ def STEAYDQRF_sim(RHS,
                    tau_degree)
 
     # initialize array for solution
-    y = np.zeros((len(t), len(IC)))
+    u = np.zeros((len(t), len(IC)))
 
-    y[0,:] = IC
+    u[0,:] = IC
     
     write_count = 0
-    r = integrate.ode(RHS_ty).set_integrator("dopri5")  # choice of method
-    r.set_initial_value(y[0,:], t[0])  # initial values
+    r = integrate.ode(RHS_tu).set_integrator("dopri5")  # choice of method
+    r.set_initial_value(u[0,:], t[0])  # initial values
     
     for i in range(1, t_sim.size):
 
         # write to y for write indices
         if np.any(i == t_sim_write_ind):
             write_count += 1
-            y[write_count, :] = r.integrate(t_sim[i])
+            u[write_count, :] = r.integrate(t_sim[i])
         else:
             # otherwise just integrate
             r.integrate(t_sim[i])  # get one more value, add it to the array
         if not r.successful():
             print("integration failed")
-            return 1e6 * np.ones(y.shape)
+            return 1e6 * np.ones(u.shape)
 
-    return y
+    return u
