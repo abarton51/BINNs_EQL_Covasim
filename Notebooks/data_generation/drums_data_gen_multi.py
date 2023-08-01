@@ -211,12 +211,22 @@ class norm_random_masking(cv.Intervention):
 
   def initialize(self,sim):
     super().initialize()
+    ppl = sim.people
     self.pop = len(sim.people)
+    self.child      = np.logical_and(ppl.age > 2, ppl.age <= 9) # set children as agents aged 2 to 9
+    self.adolescent = np.logical_and(ppl.age > 9, ppl.age <= 19) # set adolescent as agents aged 10 to 19
+    self.adult      = np.logical_and(ppl.age > 19, ppl.age <= 69) # set adult as agents aged 20 to 69
+    self.senior     = np.logical_and(ppl.age > 69, ppl.age <= 79) # set senior as agents aged 70 to 79
+    self.supsenior  = ppl.age > 79
     return
 
   def apply(self,sim):
     ppl                = sim.people
-    ppl.rel_sus        = ppl.rel_sus
+    ppl.rel_sus[self.child]        = 0.34
+    ppl.rel_sus[self.adolescent]   = 0.67
+    ppl.rel_sus[self.adult]        = 1.00
+    ppl.rel_sus[self.senior]       = 1.24
+    ppl.rel_sus[self.supsenior]    = 1.47
     self.norm          = norm.rvs(loc=self.mean,scale=self.std,size=self.pop)
     self.num_dead      = ppl.dead.sum()
     self.num_diagnosed = (ppl.diagnosed & ppl.infectious).sum()
@@ -252,11 +262,21 @@ class uniform_masking(cv.Intervention):
   def initialize(self,sim):
     super().initialize() 
     self.pop = len(sim.people)
+    ppl = sim.people
+    self.child      = np.logical_and(ppl.age > 2, ppl.age <= 9) # set children as agents aged 2 to 9
+    self.adolescent = np.logical_and(ppl.age > 9, ppl.age <= 19) # set adolescent as agents aged 10 to 19
+    self.adult      = np.logical_and(ppl.age > 19, ppl.age <= 69) # set adult as agents aged 20 to 69
+    self.senior     = np.logical_and(ppl.age > 69, ppl.age <= 79) # set senior as agents aged 70 to 79
+    self.supsenior  = ppl.age > 79
     return
   
   def apply(self,sim):
     ppl                = sim.people
-    ppl.rel_sus        = ppl.rel_sus
+    ppl.rel_sus[self.child]        = 0.34
+    ppl.rel_sus[self.adolescent]   = 0.67
+    ppl.rel_sus[self.adult]        = 1.00
+    ppl.rel_sus[self.senior]       = 1.24
+    ppl.rel_sus[self.supsenior]    = 1.47
     self.t.append(sim.t) 
     self.num_dead      = ppl.dead.sum()
     self.num_diagnosed = (ppl.diagnosed & ppl.infectious).sum()
