@@ -197,7 +197,6 @@ class demographic_masking(cv.Intervention):
     
     return
 
-
 class norm_random_masking(cv.Intervention):
   def __init__(self,model_params=None,mask_eff=None,maskprob_ub=None,maskprob_lb=None,mean=None,std=None,*args,**kwargs):
     super().__init__(**kwargs)
@@ -212,12 +211,22 @@ class norm_random_masking(cv.Intervention):
 
   def initialize(self,sim):
     super().initialize()
+    ppl = sim.people
     self.pop = len(sim.people)
+    self.child      = np.logical_and(ppl.age > 2, ppl.age <= 9) # set children as agents aged 2 to 9
+    self.adolescent = np.logical_and(ppl.age > 9, ppl.age <= 19) # set adolescent as agents aged 10 to 19
+    self.adult      = np.logical_and(ppl.age > 19, ppl.age <= 69) # set adult as agents aged 20 to 69
+    self.senior     = np.logical_and(ppl.age > 69, ppl.age <= 79) # set senior as agents aged 70 to 79
+    self.supsenior  = ppl.age > 79
     return
 
   def apply(self,sim):
     ppl                = sim.people
-    ppl.rel_sus        = ppl.rel_sus
+    ppl.rel_sus[self.child]        = 0.34
+    ppl.rel_sus[self.adolescent]   = 0.67
+    ppl.rel_sus[self.adult]        = 1.00
+    ppl.rel_sus[self.senior]       = 1.24
+    ppl.rel_sus[self.supsenior]    = 1.47
     self.norm          = norm.rvs(loc=self.mean,scale=self.std,size=self.pop)
     self.num_dead      = ppl.dead.sum()
     self.num_diagnosed = (ppl.diagnosed & ppl.infectious).sum()
@@ -253,11 +262,21 @@ class uniform_masking(cv.Intervention):
   def initialize(self,sim):
     super().initialize() 
     self.pop = len(sim.people)
+    ppl = sim.people
+    self.child      = np.logical_and(ppl.age > 2, ppl.age <= 9) # set children as agents aged 2 to 9
+    self.adolescent = np.logical_and(ppl.age > 9, ppl.age <= 19) # set adolescent as agents aged 10 to 19
+    self.adult      = np.logical_and(ppl.age > 19, ppl.age <= 69) # set adult as agents aged 20 to 69
+    self.senior     = np.logical_and(ppl.age > 69, ppl.age <= 79) # set senior as agents aged 70 to 79
+    self.supsenior  = ppl.age > 79
     return
   
   def apply(self,sim):
     ppl                = sim.people
-    ppl.rel_sus        = ppl.rel_sus
+    ppl.rel_sus[self.child]        = 0.34
+    ppl.rel_sus[self.adolescent]   = 0.67
+    ppl.rel_sus[self.adult]        = 1.00
+    ppl.rel_sus[self.senior]       = 1.24
+    ppl.rel_sus[self.supsenior]    = 1.47
     self.t.append(sim.t) 
     self.num_dead      = ppl.dead.sum()
     self.num_diagnosed = (ppl.diagnosed & ppl.infectious).sum()
@@ -437,9 +456,9 @@ def drums_data_generator_multi(model_params=None, num_runs=100):
         if masking==1:
             mk = demographic_masking(mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00,mean=100,std=50)
         elif masking==2:
-            mk = uniform_masking(model_params,mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00)
+            mk = uniform_masking(model_params, mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00)
         elif masking==3:
-            mk = norm_random_masking(model_params,mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00,mean=75,std=50)
+            mk = norm_random_masking(model_params, mask_eff=0.6,maskprob_ub=0.75,maskprob_lb=0.00,mean=75,std=50)
 
     trace_prob = {key: val*eff_ub_global for key,val in trace_prob.items()}
     ct = cv.contact_tracing(trace_probs=trace_prob)
