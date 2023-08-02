@@ -4,12 +4,12 @@ import torch.nn as nn
 
 import sys
 sys.path.append(sys.path[0] + '\\../')
-
+#from scipy.stats import beta
 from Modules.Models.BuildMLP import BuildMLP
 from Modules.Activations.SoftplusReLU import SoftplusReLU
 from Modules.Utils.Gradient import Gradient
 
-from scipy.stats import beta
+
 
 #--------------------------------Original COVASIM_BINN by Xin Li--------------------------------#
 class main_MLP(nn.Module):

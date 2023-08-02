@@ -20,6 +20,9 @@ from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
+from sklearn.linear_model import LassoCV
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import mean_squared_error
 
 def D_u(D,dx):
     
@@ -190,6 +193,113 @@ def STEAYDQRF_RHS(t, y, contact_rate, quarantine_test, params, t_max):
     # print(np.array([ds, dt, de, da, dy, dd, dq, dr, df]).sum())
 
     return np.array([ds, dt, de, da, dy, dd, dq, dr, df])
+
+
+
+
+
+
+
+
+
+#THIS IS WHERE JORDAN IS ADDING CODE:
+
+def lasso_ODE(t, y, lasso_tup, params, t_max, chi_type):
+    '''
+    t (float)           : initial time  **check me, should this be initial time or tuple of time?
+    y (list)            : list of initial conditions (floats) for STEAYDQRF
+    lasso_tup (tuple)   : tuple of lasso objects for eta beta and tau   **check me
+    params (dict)       : parameters of the Covasim model I think this is from the learned MLP, maybe I dont need these **check me
+    t_max (float)       : max of time (last day of simulation)  **check me, if time is a tuple, do I need this?
+    chi_type
+    '''
+
+    
+    population = params['population']
+    alpha = params['alpha']
+    gamma = params['gamma']
+    mu = params['mu']
+    lamda = params['lamda']
+    p_asymp = params['p_asymp']
+    n_contacts = params['n_contacts']
+    delta = params['delta']
+    eff_ub = params['eff_ub']
+    chi = chi_func(t, chi_type)
+
+ 
+    eta_lasso, beta_lasso, tau_lasso = lasso_tup
+
+    # evaluate the constant value of each parameter
+    S, T, E, A, Y, D, Q, R, F = tuple(y)   #values at this specific time
+   
+
+    eta_poly = PolynomialFeatures(degree = 2)
+    eta_input = eta_poly.fit_transform(np.array([[S, A, Y]]))
+    
+    eta_i = eta_lasso.predict(eta_input)    #eta value at this specific time
+
+    beta_poly = PolynomialFeatures(degree = 2)
+    beta_input = beta_poly.fit_transform([S+A+Y, chi])
+    beta_i = beta_lasso.predict(beta_input)
+
+    tau_poly = PolynomialFeatures(degree = 2)
+    tau_input = tau_poly.fit_transform([A, Y])
+    tau_i = tau_lasso.predict(tau_input)
+
+    new_d = mu * Y +  tau_i * Q
+
+
+
+
+
+
+
+    # evaluate LHS of ODE **check me, check all of these, I'm not sure the values from params[] are what needs to be in here
+
+    dS = - eta_i * S * (A + Y) -  beta_i * new_d *  n_contacts * S +  alpha * T
+
+    dT = beta_i * new_d *  n_contacts * S -  alpha * T
+
+    dE = eta_i * S * (A + Y) -  gamma * E
+
+    dA =  p_asymp *  gamma * E -  lamda * A -  beta_i * new_d *  n_contacts * A
+
+    dY = (1 -  p_asymp) *  gamma * E - ( mu +  lamda +  delta) * Y -  beta_i * new_d *  n_contacts * Y
+
+    dD =  new_d -  lamda * D - delta * D
+
+    dQ =  beta_i * new_d *  n_contacts * (A + Y) - (tau_i +  lamda + delta) * Q
+
+    dR =  lamda * (A + Y + D + Q)
+
+    dF =  delta * (Y + D + Q)
+
+    return np.array([dS, dT, dE, dA, dY, dD, dQ, dR, dF])
+
+
+
+
+
+#_________________________________
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def chi_func(t, chi_type):
     eff_ub = 0.3

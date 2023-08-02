@@ -37,7 +37,7 @@ def DRUMS_Lasso(
             correspond to more terms. alphas = [0, 1]
             
             intercept {bool} : Whether or not the resulting equation should solve for an intercept. The
-            default is intercept = True
+            default is intercept = True 
             
             cv {int} : The cross validation splitting strategy. Default, cv = 5.
     '''
@@ -65,7 +65,8 @@ def DRUMS_Lasso(
     lasso.fit(X_poly, lhs_values)
     
     # Get the coefficients and feature names
-    coefs = lasso.coef_
+    
+    coefs = lasso.coef_ 
     intercept = lasso.intercept_
     feature_names = poly.get_feature_names_out(input_features=input_terms)
 

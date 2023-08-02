@@ -7,13 +7,14 @@ at the heart of the integration loop.
 import sys
 sys.path.append('../')
 #%% Housekeeping
-
+import scipy.stats as sps
 import numba as nb # For faster computations
 import numpy as np # For numerics
 import random # Used only for resetting the seed
 import sciris as sc # For additional utilities
 from .settings import options as cvo # To set options
 from . import defaults as cvd # To set default types
+
 
 
 # What functions are externally visible -- note, this gets populated in each section below
@@ -245,7 +246,7 @@ def get_pdf(dist=None, par1=None, par2=None):
     symptom-to-swab for testing. For example, for Washington State, these values
     are dist='lognormal', par1=10, par2=170.
     '''
-    import scipy.stats as sps # Import here since slow
+     # Import here since slow
 
     choices = [
         'none',
