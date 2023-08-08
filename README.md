@@ -1,4 +1,4 @@
-<h1 align="center">Incorporating Adaptive Human Behavior into Epidemiological Models Using Equation Learning</h1>
+<h1 align="center">Incorporating Adaptive Human Behavior into Epidemiological Models using Equation Learning</h1>
 
 <!---
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/austin_drums_binn_schematic.png?raw=true)
