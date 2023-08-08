@@ -74,8 +74,10 @@ Folder that contains all code for Covasim version 3.1.3 created by the ["Institu
 ***
 ## References
 
-[1.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1008462) Lagergren, J. H., Nardini, J. T., Baker, R. E., Simpson, M. J., & Flores, K. B. (2020). Biologically-informed neural networks guide mechanistic modeling from sparse experimental data. PLOS Computational Biology, 16(12). https://doi.org/10.1371/journal.pcbi.1008462 
+[1.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1008462) Lagergren, J. H., Nardini, J. T., Baker, R. E., Simpson, M. J., & Flores, K. B. (2020). Biologically-informed neural networks guide mechanistic modeling from sparse experimental data. PLOS Computational Biology, 16(12).
 
-[2.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009149) Kerr, C. C., Stuart, R. M., Mistry, D., Abeysuriya, R. G., Rosenfeld, K., Hart, G. R., Núñez, R. C., Cohen, J. A., Selvaraj, P., Hagedorn, B., George, L., Jastrzębski, M., Izzo, A., Fowler, G., Palmer, A., Delport, D., Scott, N., Kelly, S., Bennette, C. S., … Klein, D. J. (2020). Covasim: An Agent-Based Model of COVID-19 Dynamics and Interventions. https://doi.org/10.1101/2020.05.10.20097469
+[2.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1009149) Kerr, C. C., Stuart, R. M., Mistry, D., Abeysuriya, R. G., Rosenfeld, K., Hart, G. R., Núñez, R. C., Cohen, J. A., Selvaraj, P., Hagedorn, B., George, L., Jastrzębski, M., Izzo, A., Fowler, G., Palmer, A., Delport, D., Scott, N., Kelly, S., Bennette, C. S., … Klein, D. J. (2020). Covasim: An Agent-Based Model of COVID-19 Dynamics and Interventions.
 
-[3.](https://www.sciencedirect.com/science/article/pii/S0021999118307125) Raissi, M., Perdikaris, P., &amp; Karniadakis, G. E. (2018, November 3). Physics-informed Neural Networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational Physics. https://www.sciencedirect.com/science/article/pii/S0021999118307125
+[3.](https://www.sciencedirect.com/science/article/pii/S0021999118307125) Raissi, M., Perdikaris, P., &amp; Karniadakis, G. E. (2018, November 3). Physics-informed Neural Networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational Physics.
+
+[4.](https://royalsocietypublishing.org/doi/10.1098/rsif.2020.0987) Nardini, J. T., Baker, R. E., Simpson, M. J., & Flores, K. B. (2021, March 17). Learning differential equation models from stochastic agent-based model ... The Royal Society Publishing.
