@@ -1,12 +1,6 @@
 <h1 align="center">Incorporating Adaptive Human Behavior into Epidemiological Models using Equation Learning</h1>
 
-<!---
-![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/austin_drums_binn_schematic.png?raw=true)
-![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/austin_drums_binn_schematic_github.png?raw=true)
-![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/reu_binn_schematic_github.png?raw=true)
-![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/adrums_binn_schematic.png?raw=true)
--->
-![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/github/drums_austin_binn_schematic_github.png?raw=true)
+![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/github/binn_schematic_masking_observed_gh.png?raw=true)
 
 <h2 align="center">Code Repository for Data Generation, Equation Learning, BINNs, Visualization, and Analysis</h2>
 <h3 align="center"><ins>Authors:</ins> Austin Barton, Jonathan Greer, Jordan Klein, Patrick Haughey; <ins>Mentor:</ins> Kevin Flores</h3>
