@@ -16,7 +16,6 @@ Code repository for manuscript titled:
 
 All code under the folder titled "covasim" is the work of the ***["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim)***. We use covasim version 3.1.3 for our implementations.
 Equation learning and BINNs code has been adapted from [[1.]](https://arxiv.org/abs/2005.13073) and [Xin Li](xli86@ncsu.edu).
-You can find all posters for this research project under `Figures/poster` for high level overviews of our work.
 
 ***
 ## Introduction
