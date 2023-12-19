@@ -8,7 +8,7 @@ Code repository for manuscript titled:
 
 > Incorporating Adaptive Human Behavior into Epidemiological Models using Equation Learning
 >
-> [Austin T. Barton](github.com/abarton51), Jordan Klein, Patrick M. Haughey, Jonathan Greer, [Kevin B. Flores*](kbflores@ncsu.edu)
+> [Austin T. Barton](github.com/abarton51), Jordan Klein, [Kevin B. Flores*](kbflores@ncsu.edu)
 >
 >  \* Corresponding author.
 >
@@ -70,6 +70,10 @@ Notebook that interacts with data generator files.
   - **xin_figs** - Xin Li's figures.
 ### covasim
 Folder that contains all code for Covasim version 3.1.3 created by the ["Institute for Disease Modeling"](https://github.com/InstituteforDiseaseModeling/covasim). This is the simulator our code interacts with to generate data.
+
+***
+## Contributions
+**Contributors**: Austin T. Barton, Jordan Klein, Kevin B. Flores, Patrick M. Haughey, Jonathan Greer, Xin Li.
 
 ***
 ## References
