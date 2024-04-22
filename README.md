@@ -4,7 +4,7 @@
 
 <h2 align="center">Code Repository for Data Generation, Equation Learning, BINNs, Visualization, and Analysis</h2>
 
-Code repository for manuscript titled:
+Code repository for undergraduate research project titled:
 
 > Incorporating Adaptive Human Behavior into Epidemiological Models using Equation Learning
 >
