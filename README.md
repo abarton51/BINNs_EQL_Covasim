@@ -1,6 +1,7 @@
 <h1 align="center">Incorporating Adaptive Human Behavior into Epidemiological Models using Equation Learning</h1>
 
 ![](https://github.com/abarton51/BINNs_EQL_Covasim/blob/main/Figures/github/binnschematic_github.png?raw=true)
+*Left: RAG Pipeline. Right: RALM Analysis Pipeline.*
 
 <h2 align="center">Code Repository for Data Generation, Equation Learning, BINNs, Visualization, and Analysis</h2>
 
